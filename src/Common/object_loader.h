@@ -55,10 +55,10 @@ struct CLoader
         template <typename T>
         struct has_value_compare
         {
-            template <typename _P>
+            template <typename T2>
             static object_type_traits::detail::yes select(
-                object_type_traits::detail::other<typename _P::value_compare>*);
-            template <typename _P>
+                object_type_traits::detail::other<typename T2::value_compare>*);
+            template <typename T2>
             static object_type_traits::detail::no select(...);
             enum
             {
@@ -134,7 +134,7 @@ struct CLoader
     {
         shared_str S;
         stream.r_stringZ(S);
-        data = xr_strdup(*S);
+        data = xr_strdup(S.c_str());
     }
 
     static void load_data(shared_str& data, M& stream, const P& p) { stream.r_stringZ(data); }
@@ -142,7 +142,7 @@ struct CLoader
     {
         shared_str S;
         stream.r_stringZ(S);
-        data = *S;
+        data = S.c_str();
     }
 
     template <typename T1, typename T2>

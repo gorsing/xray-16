@@ -18,10 +18,10 @@ class CHUDState
 public:
     enum EHudStates
     {
-        eIdle = 0,
+        eHidden = 0,
+        eIdle,
         eShowing,
         eHiding,
-        eHidden,
         eBore,
         eLastBaseState = eBore,
     };
@@ -92,6 +92,9 @@ public:
     virtual void PlaySound(pcstr alias, const Fvector& position, u8 index); //Alundaio: Play at index
     virtual bool Action(u16 cmd, u32 flags) { return false; }
     void OnMovementChanged(ACTOR_DEFS::EMoveCommand cmd);
+
+    virtual void TransformPosFromWorldToHud(Fvector& worldPos);
+    virtual void TransformDirFromWorldToHud(Fvector& worldDir);
 
     virtual u8 GetCurrentHudOffsetIdx() { return 0; }
     BOOL GetHUDmode();
@@ -178,10 +181,9 @@ public:
     }
     IC u32 animation_slot() { return m_animation_slot; }
     virtual void on_renderable_Render(u32 context_id, IRenderable* root) = 0;
-    virtual void debug_draw_firedeps(){};
 
     virtual CHudItem* cast_hud_item() { return this; }
     void PlayAnimIdleMovingCrouch(); //AVO: new crouch idle animation
-    bool isHUDAnimationExist(pcstr anim_name) const;
-    pcstr WhichHUDAnimationExist(pcstr anim_name, pcstr anim_name2) const;
+    bool isHUDAnimationExist(pcstr anim_name, bool silent = false) const;
+    pcstr WhichHUDAnimationExist(pcstr anim_name, pcstr anim_name2, bool silent = false) const;
 };

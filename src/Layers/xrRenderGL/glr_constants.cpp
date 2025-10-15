@@ -3,11 +3,13 @@
 
 #include "../xrRender/r_constants.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 static class cl_sampler : public R_constant_setup
 {
     void setup(CBackend& cmd_list, R_constant* C) override
     {
-        if (HW.SeparateShaderObjectsSupported)
+        if (GLAD_GL_ARB_separate_shader_objects)
             CHK_GL(glProgramUniform1i(C->samp.program, C->samp.location, C->samp.index));
         else
         {
@@ -179,3 +181,4 @@ BOOL R_constant_table::parse(void* _desc, u32 destination)
     xr_free(name);
     return TRUE;
 }
+} // namespace xray::render::RENDER_NAMESPACE

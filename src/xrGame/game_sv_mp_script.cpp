@@ -55,7 +55,10 @@ void game_sv_mp_script::Create(shared_str& options)
 void game_sv_mp_script::SpawnPlayer(ClientID id, LPCSTR N, LPCSTR SkinName, RPoint rp)
 {
     xrClientData* CL = m_server->ID_to_client(id);
+    VERIFY(CL);
+
     game_PlayerState* ps_who = CL->ps;
+    VERIFY(ps_who);
     ps_who->setFlag(GAME_PLAYER_FLAG_VERY_VERY_DEAD);
 
     CSE_Abstract* pOldOwner = CL->owner;
@@ -119,9 +122,11 @@ void game_sv_mp_script::SpawnPlayer(ClientID id, LPCSTR N, LPCSTR SkinName, RPoi
     Msg("* %s respawned as %s", get_name_id(id), (0 == pA) ? "spectator" : "actor");
     spawn_end(E, id);
 
-    ps_who->SetGameID(CL->owner->ID);
-
-    CL->owner->owner = CL;
+    if (CL->owner)
+    {
+        ps_who->SetGameID(CL->owner->ID);
+        CL->owner->owner = CL;
+    }
 
     signal_Syncronize();
 }
@@ -174,8 +179,7 @@ struct CGameSvMpScriptWrapperBase : public T, public luabind::wrap_base
 
 #pragma warning(pop)
 
-#pragma optimize("s", on)
-void game_sv_mp_script_register(lua_State* luaState)
+void game_sv_mp::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -190,7 +194,7 @@ void game_sv_mp_script_register(lua_State* luaState)
     ];
 }
 
-void game_sv_mp_script_script_register(lua_State* luaState)
+void game_sv_mp_script::script_register(lua_State* luaState)
 {
     using namespace luabind;
     using namespace luabind::policy;
@@ -224,6 +228,3 @@ void game_sv_mp_script_script_register(lua_State* luaState)
             .def("createPlayerState", &BaseType::createPlayerState, &WrapType::createPlayerState_static, adopt<0>())
     ];
 }
-
-SCRIPT_EXPORT_FUNC(game_sv_mp, (game_sv_GameState), game_sv_mp_script_register);
-SCRIPT_EXPORT_FUNC(game_sv_mp_script, (game_sv_mp), game_sv_mp_script_script_register);

@@ -3,6 +3,10 @@
 #pragma hdrstop
 
 #include "LightAnimLibrary.h"
+
+#include "xrScriptEngine/ScriptExporter.hpp"
+#include "xrScriptEngine/script_space.hpp"
+
 //---------------------------------------------------------------------------
 #define LANIM_VERSION 0x0001
 //---------------------------------------------------------------------------
@@ -196,6 +200,8 @@ void ELightAnimLibrary::OnCreate() { Load(); }
 void ELightAnimLibrary::OnDestroy() { Unload(); }
 void ELightAnimLibrary::Unload()
 {
+    ZoneScoped;
+
     for (auto& la : Items)
         xr_delete(la);
     Items.clear();
@@ -203,6 +209,8 @@ void ELightAnimLibrary::Unload()
 
 void ELightAnimLibrary::Load()
 {
+    ZoneScoped;
+
     string_path fn;
     FS.update_path(fn, _game_data_, "lanims.xr");
     IReader* fs = FS.r_open(fn);
@@ -239,6 +247,8 @@ void ELightAnimLibrary::Load()
 
 void ELightAnimLibrary::Save()
 {
+    ZoneScoped;
+
     CMemoryWriter F;
     F.open_chunk(CHUNK_VERSION);
     F.w_u16(LANIM_VERSION);
@@ -333,3 +343,50 @@ void ELightAnimLibrary::RenameObject(pcstr nm0, pcstr nm1, EItemType type)
 }
 //---------------------------------------------------------------------------
 #endif
+
+struct lanim_wrapper
+{
+    CLAItem* item;
+
+public:
+    lanim_wrapper(pcstr name)
+    {
+        load(name);
+    }
+
+    void load(pcstr name)
+    {
+        item = LALib.FindItem(name);
+        R_ASSERT3(item, "Can't find color anim:", name);
+    }
+
+    u32 length() const
+    {
+        VERIFY(item);
+        return item->Length_ms();
+    }
+
+    Fcolor calculate(float T) const
+    {
+        int frame;
+        VERIFY(item);
+        return Fcolor(item->CalculateRGB(T, frame));
+    }
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
+};
+
+void lanim_wrapper::script_register(lua_State* luaState)
+{
+    using namespace luabind;
+
+    module(luaState)
+    [
+        class_<lanim_wrapper>("color_animator")
+            .def(constructor<pcstr>())
+            .def("load", &lanim_wrapper::load)
+            .def("calculate", &lanim_wrapper::calculate)
+            .def("length", &lanim_wrapper::length)
+    ];
+}

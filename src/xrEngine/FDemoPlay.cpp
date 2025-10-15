@@ -10,8 +10,6 @@
 #include "Render.h"
 #include "CameraManager.h"
 
-#include "xrSASH.h"
-
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
 //////////////////////////////////////////////////////////////////////
@@ -22,7 +20,7 @@ CDemoPlay::CDemoPlay(const char* name, float ms, u32 cycles, float life_time)
     Msg("*** Playing demo: %s", name);
 
     Console->Execute("hud_weapon 0");
-    if (g_bBenchmark || g_SASH.IsRunning())
+    if (g_bBenchmark)
         Console->Execute("hud_draw 0");
 
     fSpeed = ms;
@@ -67,7 +65,7 @@ CDemoPlay::CDemoPlay(const char* name, float ms, u32 cycles, float life_time)
         Log("~ Total key-frames: ", m_count);
     }
     stat_started = false;
-    Device.PreCache(50, true, false);
+    Device.PreCache(50, false);
 }
 
 CDemoPlay::~CDemoPlay()
@@ -76,7 +74,7 @@ CDemoPlay::~CDemoPlay()
     xr_delete(m_pMotion);
     xr_delete(m_MParam);
     Console->Execute("hud_weapon 1");
-    if (g_bBenchmark || g_SASH.IsRunning())
+    if (g_bBenchmark)
         Console->Execute("hud_draw 1");
 }
 
@@ -100,8 +98,6 @@ void CDemoPlay::stat_Stop()
 {
     if (!stat_started)
         return;
-
-    // g_SASH.EndBenchmark();
 
     stat_started = false;
     float stat_total = stat_Timer_total.GetElapsed_sec();
@@ -195,10 +191,7 @@ void CDemoPlay::stat_Stop()
     }
 }
 
-#define FIX(a)           \
-    while (a >= m_count) \
-    a -= m_count
-void spline1(float t, Fvector* p, Fvector* ret)
+static void spline1(float t, Fvector* p, Fvector* ret)
 {
     float t2 = t * t;
     float t3 = t2 * t;
@@ -226,15 +219,8 @@ bool CDemoPlay::ProcessCam(SCamEffectorInfo& info)
     if (Device.dwPrecacheFrame)
         return true;
 
-    if (stat_started)
-    {
-        // g_SASH.DisplayFrame(Device.fTimeGlobal);
-    }
-    else
-    {
-        // g_SASH.StartBenchmark();
+    if (!stat_started)
         stat_Start();
-    }
 
     // Per-frame statistics
     {
@@ -286,14 +272,23 @@ bool CDemoPlay::ProcessCam(SCamEffectorInfo& info)
             // stat_Start ();
         }
 
+        const auto clamp_by_max = [this](int& f)
+        {
+            while (f >= m_count)
+                f -= m_count;
+        };
+
         int f1 = frame;
-        FIX(f1);
+        clamp_by_max(f1);
+
         int f2 = f1 + 1;
-        FIX(f2);
+        clamp_by_max(f2);
+
         int f3 = f2 + 1;
-        FIX(f3);
+        clamp_by_max(f3);
+
         int f4 = f3 + 1;
-        FIX(f4);
+        clamp_by_max(f4);
 
         Fmatrix *m1, *m2, *m3, *m4;
         Fvector v[4];

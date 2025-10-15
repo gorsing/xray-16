@@ -54,7 +54,7 @@ void CPHDestroyable::GenSpawnReplace(u16 ref_id, LPCSTR section, shared_str visu
     CSE_Abstract* D = F_entity_Create(section); //*cNameSect()
     VERIFY(D);
     CSE_Visual* V = smart_cast<CSE_Visual*>(D);
-    V->set_visual(*visual_name);
+    V->set_visual(visual_name.c_str());
     CSE_PHSkeleton* l_tpPHSkeleton = smart_cast<CSE_PHSkeleton*>(D);
     VERIFY(l_tpPHSkeleton);
     l_tpPHSkeleton->source_id = ref_id;
@@ -173,8 +173,17 @@ void CPHDestroyable::Load(CInifile* ini, LPCSTR section)
         if (data.Data.size() > 0)
             m_flags.set(fl_destroyable, true);
         for (const auto& I : data.Data)
-            if (I.first.size())
+        {
+            if (I.first.empty())
+                continue;
+
+            u32 count = 1;
+            if (!I.second.empty())
+                count = atoi(I.second.c_str());
+
+            for (u32 i = 0; i < count; ++i)
                 m_destroyed_obj_visual_names.push_back(I.first);
+        }
     }
 }
 void CPHDestroyable::Load(LPCSTR section)

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="windows-1251" ?>
+<?xml version="1.0" encoding="windows-1252" ?>
 <string_table>
 	<string id="st_unequip">
 		<text>wegstecken</text>
@@ -22,7 +22,7 @@
 		<text>Erstelle neues Spiel</text>
 	</string>
 	<string id="ui_mm_always_active">
-		<text>Immer aktiv</text>
+		<text>Nicht pausieren bei Alt+Tab</text>
 	</string>
 	<string id="ui_mm_detail_radius">
 		<text>Grasdetail Radius</text>
@@ -42,17 +42,26 @@
 	<string id="ui_mm_loadingstages">
 		<text>Ladefortschritt anzeigen</text>
 	</string>
-	<string id="renderer_gl">
+	<string id="renderer_rgl">
 		<text>Erw. Volldyn. Beleuchtung (OpenGL)</text>
 	</string>
-	<string id="ui_mm_r2_fxaa">
-		<text>FXAA</text>
+	<string id="ui_mm_window_mode">
+		<text>Window mode</text>
+	</string>
+	<string id="st_opt_windowed">
+		<text>Windowed</text>
+	</string>
+	<string id="st_opt_windowed_borderless">
+		<text>Windowed borderless</text>
+	</string>
+	<string id="st_opt_fullscreen">
+		<text>Fullscreen</text>
+	</string>
+	<string id="st_opt_fullscreen_borderless">
+		<text>Fullscreen (fast Alt+Tab)</text>
 	</string>
 	<string id="ui_mm_r2_smap_size">
 		<text>Qualitat der Schattenkarte</text>
-	</string>
-	<string id="ui_mm_r3_dynamic_wet_surfaces_opt">
-		<text>Nassflachenoptimierung</text>
 	</string>
 	<string id="ui_mm_r3_dynamic_wet_surfaces_near">
 		<text>Nassflachen Nahbereich</text>
@@ -64,10 +73,64 @@
 		<text>Nassflachen Qualitat</text>
 	</string>
 	<string id="ui_mm_fov">
-		<text>Blickwinkel (FOV)</text>
+		<text>Sichtfeld</text>
+	</string>
+	<string id="ui_mm_hud_fov">
+		<text>Sichtfeld der HUD</text>
+	</string>
+	<string id="ui_mm_fps_limit">
+		<text>Spiel-FPS-Limit</text>
+	</string>
+	<string id="ui_mm_fps_limit_in_menu">
+		<text>Menь-FPS-Limit</text>
 	</string>
 	<string id="ui_mm_localization">
 		<text>Sprache</text>
+	</string>
+	<string id="ui_mm_shader_preset">
+		<text>Graphics mode</text>
+	</string>
+	<string id="ui_mm_shader_preset_vanilla">
+		<text>vanilla</text>
+	</string>
+	<string id="ui_mm_shader_preset_enhanced_default">
+		<text>enhanced (Default)</text>
+	</string>
+	<string id="ui_mm_shader_preset_enhanced_high">
+		<text>enhanced (High)</text>
+	</string>
+	<string id="ui_mm_color_grading_preset">
+		<text>Colour grading</text>
+	</string>
+	<string id="ui_mm_color_grading_default">
+		<text>default</text>
+	</string>
+	<string id="ui_mm_color_grading_cold">
+		<text>cold</text>
+	</string>
+	<string id="ui_mm_color_grading_filmic_01">
+		<text>Filmic 1</text>
+	</string>
+	<string id="ui_mm_color_grading_filmic_02">
+		<text>Filmic 2</text>
+	</string>
+	<string id="ui_mm_color_grading_filmic_03">
+		<text>Filmic 3</text>
+	</string>
+	<string id="ui_mm_color_grading_hollywood">
+		<text>Hollywood</text>
+	</string>
+	<string id="ui_mm_color_grading_vanilla">
+		<text>Vanilla</text>
+	</string>
+	<string id="ui_mm_color_grading_vibrant">
+		<text>Vibrant</text>
+	</string>
+	<string id="ui_mm_color_grading_warm">
+		<text>warm</text>
+	</string>
+	<string id="cze">
+    	<text>Tschechisch (Czech)</text>
 	</string>
 	<string id="eng">
 		<text>Englisch (English)</text>
@@ -98,5 +161,8 @@
 	</string>
 	<string id="jpn">
 		<text>Japanisch (Japanese)</text>
+	</string>
+	<string id="ukr">
+		<text>Ukrainische (Ukrainian)</text>
 	</string>
 </string_table>

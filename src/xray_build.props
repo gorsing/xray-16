@@ -16,16 +16,15 @@
         4458 : declaration of 'x' hides class member
         -->
       <DisableSpecificWarnings>4201;4251;4275;4458</DisableSpecificWarnings>
-      <!--
-        LUABIND_DYNAMIC_LINK : self-explanatory
-        MSVC;dSINGLE;WIN32 : for ODE and xrPhysics
-        -->
+      <!-- MSVC;dSINGLE;WIN32 : for ODE and xrPhysics -->
       <PreprocessorDefinitions>
-        LUABIND_DYNAMIC_LINK;
         MSVC;
         dSINGLE;
         WIN32;
-        USE_CRYPTOPP;
+        USE_OPENSSL;
+        IMGUI_DISABLE_OBSOLETE_KEYIO;
+        IMGUI_DISABLE_OBSOLETE_FUNCTIONS;
+        IMGUI_DEFINE_MATH_OPERATORS;
         %(PreprocessorDefinitions)
       </PreprocessorDefinitions>
       <BufferSecurityCheck>false</BufferSecurityCheck>
@@ -35,7 +34,7 @@
       <FloatingPointModel>Fast</FloatingPointModel>
       <PrecompiledHeader>Use</PrecompiledHeader>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
       <ConformanceMode>true</ConformanceMode>
       <WarningLevel>Level2</WarningLevel>
       <TreatWarningAsError>true</TreatWarningAsError>
@@ -46,18 +45,27 @@
     </Link>
   </ItemDefinitionGroup>
 
+  <!-- Common non Master Gold settings -->
+  <ItemDefinitionGroup Condition="!$(Configuration.Contains('Master Gold'))">
+    <ClCompile>
+      <PreprocessorDefinitions>
+        XRAY_EXCEPTIONS=1;
+        LUABIND_DYNAMIC_LINK;
+        %(PreprocessorDefinitions)
+      </PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
   <!-- Common debug settings -->
   <PropertyGroup Condition="$(Configuration.Contains('Debug'))" Label="Configuration">
     <UseDebugLibraries>true</UseDebugLibraries>
-    <LinkIncremental>true</LinkIncremental>
-	<EnableASAN>true</EnableASAN>
+    <LinkIncremental>false</LinkIncremental>
   </PropertyGroup>
 
   <ItemDefinitionGroup Condition="$(Configuration.Contains('Debug'))">
     <ClCompile>
       <PreprocessorDefinitions>DEBUG;_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
-      <!-- MultiProcessorCompilation isn't compatible with LinkIncremental and UseDebugLibraries -->
-      <MultiProcessorCompilation>false</MultiProcessorCompilation>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <BufferSecurityCheck>false</BufferSecurityCheck>
       <FunctionLevelLinking>true</FunctionLevelLinking>
     </ClCompile>
@@ -96,7 +104,13 @@
   <!-- Mixed settings -->
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Mixed'">
     <ClCompile>
-      <PreprocessorDefinitions>DEBUG;MIXED;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>
+        DEBUG;
+        MIXED;
+        TRACY_ENABLE;
+        TRACY_NO_FRAME_IMAGE;
+        %(PreprocessorDefinitions)
+      </PreprocessorDefinitions>
       <!-- Optimization is automatically enabled when UseDebugLibraries == false. That's why we'll turn it off manually -->
       <Optimization>Disabled</Optimization>
     </ClCompile>
@@ -105,11 +119,18 @@
     </Link>
   </ItemDefinitionGroup>
 
+  <!-- Mixed non-CI settings -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Mixed' and '$(CI)' == ''" Label="Configuration">
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+
   <!-- Master Gold settings -->
   <ItemDefinitionGroup Condition="$(Configuration.Contains('Master Gold'))">
     <ClCompile>
       <ExceptionHandling>false</ExceptionHandling>
       <PreprocessorDefinitions>
+        XRAY_STATIC_BUILD;
+        XRAY_EXCEPTIONS=0;
         MASTER_GOLD;
         _HAS_EXCEPTIONS=0;
         LUABIND_NO_EXCEPTIONS;

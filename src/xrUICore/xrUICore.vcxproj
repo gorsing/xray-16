@@ -51,6 +51,9 @@
     <ProjectReference Include="..\Layers\xrAPI\xrAPI.vcxproj">
       <Project>{1daec516-e52c-4a3c-a4da-ae3553e6e0f8}</Project>
     </ProjectReference>
+    <ProjectReference Include="..\xrSound\xrSound.vcxproj">
+      <Project>{ccca7859-eb86-493e-9b53-c4235f45b3c5}</Project>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="arrow\ui_arrow.h" />
@@ -72,7 +75,6 @@
     <ClInclude Include="InteractiveBackground\UI_IB_Static.h" />
     <ClInclude Include="Lines\UILine.h" />
     <ClInclude Include="Lines\UILines.h" />
-    <ClInclude Include="Lines\uilinestd.h" />
     <ClInclude Include="Lines\UISubLine.h" />
     <ClInclude Include="ListBox\UIListBox.h" />
     <ClInclude Include="ListBox\UIListBoxItem.h" />
@@ -84,7 +86,6 @@
     <ClInclude Include="MessageBox\UIMessageBox.h" />
     <ClInclude Include="Options\UIOptionsItem.h" />
     <ClInclude Include="Options\UIOptionsManager.h" />
-    <ClInclude Include="Options\UIOptionsManagerScript.h" />
     <ClInclude Include="pch.hpp" />
     <ClInclude Include="ProgressBar\UIDoubleProgressBar.h" />
     <ClInclude Include="ProgressBar\UIProgressBar.h" />
@@ -107,6 +108,7 @@
     <ClInclude Include="uiabstract.h" />
     <ClInclude Include="UIMessages.h" />
     <ClInclude Include="ui_debug.h" />
+    <ClInclude Include="ui_focus.h" />
     <ClInclude Include="ui_styles.h" />
     <ClInclude Include="ui_base.h" />
     <ClInclude Include="ui_defs.h" />
@@ -123,17 +125,14 @@
     <ClCompile Include="Buttons\UI3tButton.cpp" />
     <ClCompile Include="Buttons\UIBtnHint.cpp" />
     <ClCompile Include="Buttons\UIButton.cpp" />
-    <ClCompile Include="Buttons\UIButton_script.cpp" />
     <ClCompile Include="Buttons\UICheckButton.cpp" />
     <ClCompile Include="Buttons\UIRadioButton.cpp" />
     <ClCompile Include="Callbacks\UIWndCallback.cpp" />
     <ClCompile Include="ComboBox\UIComboBox.cpp" />
-    <ClCompile Include="ComboBox\UIComboBox_script.cpp" />
     <ClCompile Include="Cursor\UICursor.cpp" />
     <ClCompile Include="EditBox\UICustomEdit.cpp" />
     <ClCompile Include="EditBox\UIEditBox.cpp" />
     <ClCompile Include="EditBox\UIEditBoxEx.cpp" />
-    <ClCompile Include="EditBox\UIEditBox_script.cpp" />
     <ClCompile Include="FontManager\FontManager.cpp" />
     <ClCompile Include="Hint\UIHint.cpp" />
     <ClCompile Include="InteractiveBackground\UI_IB_Static.cpp" />
@@ -143,25 +142,19 @@
     <ClCompile Include="ListBox\UIListBox.cpp" />
     <ClCompile Include="ListBox\UIListBoxItem.cpp" />
     <ClCompile Include="ListBox\UIListBoxItemMsgChain.cpp" />
-    <ClCompile Include="ListBox\UIListBox_script.cpp" />
     <ClCompile Include="ListWnd\UIListItem.cpp" />
     <ClCompile Include="ListWnd\UIListItemEx.cpp" />
     <ClCompile Include="ListWnd\UIListWnd.cpp" />
-    <ClCompile Include="ListWnd\UIListWnd_script.cpp" />
     <ClCompile Include="MessageBox\UIMessageBox.cpp" />
-    <ClCompile Include="MessageBox\UIMessageBox_script.cpp" />
     <ClCompile Include="Options\UIOptionsItem.cpp" />
     <ClCompile Include="Options\UIOptionsManager.cpp" />
-    <ClCompile Include="Options\UIOptionsManagerScript.cpp" />
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
     <ClCompile Include="ProgressBar\UIDoubleProgressBar.cpp" />
     <ClCompile Include="ProgressBar\UIProgressBar.cpp" />
-    <ClCompile Include="ProgressBar\UIProgressBar_script.cpp" />
     <ClCompile Include="ProgressBar\UIProgressShape.cpp" />
     <ClCompile Include="PropertiesBox\UIPropertiesBox.cpp" />
-    <ClCompile Include="PropertiesBox\UIPropertiesBox_script.cpp" />
     <ClCompile Include="ScrollBar\UIFixedScrollBar.cpp" />
     <ClCompile Include="ScrollBar\UIScrollBar.cpp" />
     <ClCompile Include="ScrollBar\UIScrollBox.cpp" />
@@ -173,19 +166,18 @@
     <ClCompile Include="Static\UILanimController.cpp" />
     <ClCompile Include="Static\UIStatic.cpp" />
     <ClCompile Include="Static\UIStaticItem.cpp" />
-    <ClCompile Include="Static\UIStatic_script.cpp" />
     <ClCompile Include="TabControl\UITabButton.cpp" />
     <ClCompile Include="TabControl\UITabControl.cpp" />
-    <ClCompile Include="TabControl\UITabControl_script.cpp" />
     <ClCompile Include="TrackBar\UITrackBar.cpp" />
     <ClCompile Include="ui_debug.cpp" />
+    <ClCompile Include="ui_export_script.cpp" />
+    <ClCompile Include="ui_focus.cpp" />
     <ClCompile Include="ui_styles.cpp" />
     <ClCompile Include="ui_base.cpp" />
     <ClCompile Include="Windows\UIFrameLineWnd.cpp" />
     <ClCompile Include="Windows\UIFrameWindow.cpp" />
     <ClCompile Include="Windows\UITextFrameLineWnd.cpp" />
     <ClCompile Include="Windows\UIWindow.cpp" />
-    <ClCompile Include="Windows\UIWindow_script.cpp" />
     <ClCompile Include="XML\UITextureMaster.cpp" />
     <ClCompile Include="XML\UIXmlInitBase.cpp" />
     <ClCompile Include="XML\xrUIXmlParser.cpp" />
@@ -198,14 +190,14 @@
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
-    <Import Project="..\packages\sdl2.nuget.redist.2.26.1\build\native\sdl2.nuget.redist.targets" Condition="Exists('..\packages\sdl2.nuget.redist.2.26.1\build\native\sdl2.nuget.redist.targets')" />
-    <Import Project="..\packages\sdl2.nuget.2.26.1\build\native\sdl2.nuget.targets" Condition="Exists('..\packages\sdl2.nuget.2.26.1\build\native\sdl2.nuget.targets')" />
+    <Import Project="..\packages\sdl2.nuget.redist.2.32.4\build\native\sdl2.nuget.redist.targets" Condition="Exists('..\packages\sdl2.nuget.redist.2.32.4\build\native\sdl2.nuget.redist.targets')" />
+    <Import Project="..\packages\sdl2.nuget.2.32.4\build\native\sdl2.nuget.targets" Condition="Exists('..\packages\sdl2.nuget.2.32.4\build\native\sdl2.nuget.targets')" />
   </ImportGroup>
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <ErrorText>This project references NuGet package(s) that are missing on this computer. Use NuGet Package Restore to download them.  For more information, see http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is {0}.</ErrorText>
     </PropertyGroup>
-    <Error Condition="!Exists('..\packages\sdl2.nuget.redist.2.26.1\build\native\sdl2.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.redist.2.26.1\build\native\sdl2.nuget.redist.targets'))" />
-    <Error Condition="!Exists('..\packages\sdl2.nuget.2.26.1\build\native\sdl2.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.2.26.1\build\native\sdl2.nuget.targets'))" />
+    <Error Condition="!Exists('..\packages\sdl2.nuget.redist.2.32.4\build\native\sdl2.nuget.redist.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.redist.2.32.4\build\native\sdl2.nuget.redist.targets'))" />
+    <Error Condition="!Exists('..\packages\sdl2.nuget.2.32.4\build\native\sdl2.nuget.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\sdl2.nuget.2.32.4\build\native\sdl2.nuget.targets'))" />
   </Target>
 </Project>

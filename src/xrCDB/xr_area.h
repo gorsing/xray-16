@@ -9,6 +9,7 @@
 
 // fwd. decl.
 class ISpatial;
+class ISpatial_DB;
 class ICollisionForm;
 class IGameObject;
 class Lock;
@@ -34,16 +35,13 @@ struct CObjectSpaceData
 struct hdrCFORM;
 class XRCDB_API CObjectSpace : protected CObjectSpaceData, public Noncopyable
 {
-    // Debug
+    ISpatial_DB* SpatialSpace{};
     CDB::MODEL Static;
     Fbox m_BoundingVolume;
 
 public:
 #ifdef DEBUG
-    FactoryPtr<IObjectSpaceRender>* m_pRender;
-// ref_shader							sh_debug;
-// clQueryCollision					q_debug;			// MT: dangerous
-// xr_vector<std::pair<Fsphere,u32> >	dbg_S;				// MT: dangerous
+    FactoryPtr<IObjectSpaceRender>* m_pRender{};
 #endif
 
 private:
@@ -59,25 +57,30 @@ private:
         collide::test_callback* tb, IGameObject* ignore_object);
 
 public:
-    CObjectSpace();
+    CObjectSpace(ISpatial_DB* spatialSpace);
     ~CObjectSpace();
 
     void Load  (CDB::build_callback build_callback,
                 CDB::serialize_callback serialize_callback,
-                CDB::deserialize_callback deserialize_callback);
+                CDB::deserialize_callback deserialize_callback,
+                CDB::remapping_materials_callback remapping_materials_callback);
 
     void Load  (LPCSTR path, LPCSTR fname, CDB::build_callback build_callback,
                 CDB::serialize_callback serialize_callback,
-                CDB::deserialize_callback deserialize_callback);
+                CDB::deserialize_callback deserialize_callback,
+                CDB::remapping_materials_callback remapping_materials_callback);
 
     void Load  (IReader* R, CDB::build_callback build_callback,
                 CDB::serialize_callback serialize_callback,
-                CDB::deserialize_callback deserialize_callback);
+                CDB::deserialize_callback deserialize_callback,
+                CDB::remapping_materials_callback remapping_materials_callback);
 
     void Create(Fvector* verts, CDB::TRI* tris, const hdrCFORM& H,
                 CDB::build_callback build_callback,
                 CDB::serialize_callback serialize_callback,
-                CDB::deserialize_callback deserialize_callback);
+                CDB::deserialize_callback deserialize_callback,
+                CDB::remapping_materials_callback remapping_materials_callback,
+                IReader* cacheStream = nullptr);
 
     // Occluded/No
     bool RayTest(const Fvector& start, const Fvector& dir, float range, collide::rq_target tgt,
@@ -103,7 +106,7 @@ public:
     CDB::TRI* GetStaticTris() { return Static.get_tris(); }
     Fvector* GetStaticVerts() { return Static.get_verts(); }
     CDB::MODEL* GetStaticModel() { return &Static; }
-    const Fbox& GetBoundingVolume() { return m_BoundingVolume; }
+    const Fbox& GetBoundingVolume() const { return m_BoundingVolume; }
 // Debugging
 #ifdef DEBUG
     void dbgRender();

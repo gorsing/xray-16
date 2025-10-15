@@ -2,77 +2,40 @@
 #pragma hdrstop
 
 #include "xrDebug.h"
+#include "Debug/StackTrace.h"
 #include "os_clipboard.h"
 #include "log.h"
 #include "Threading/ScopeLock.hpp"
 
-#if defined(XR_PLATFORM_WINDOWS)
-#include "Debug/dxerr.h"
-#include "Debug/MiniDump.h"
-#endif
-
 #include <SDL.h>
-
-#ifdef XR_PLATFORM_WINDOWS
-#   define USE_BUG_TRAP
-static BOOL bException = FALSE;
-#endif
-
-#ifdef USE_BUG_TRAP
-#   include <BugTrap/source/Client/BugTrap.h>
-#else
-#   include <exception>
-#endif
 
 #include <csignal>
 
 #if defined(XR_PLATFORM_WINDOWS)
-#   include <SDL_syswm.h>
+#   include <dbghelp.h>
 #   include <direct.h>
 #   include <new.h> // for _set_new_mode
 #   include <errorrep.h> // ReportFault
-#elif defined(XR_PLATFORM_LINUX)
-#   include <sys/user.h>
-#   include <sys/ptrace.h>
-#   include <cxxabi.h>
-#   include <dlfcn.h>
-#   if __has_include(<execinfo.h>)
-#       include <execinfo.h>
+
+#   define USE_BUG_TRAP
+#   ifdef USE_BUG_TRAP
+#       include "BugTrap.h"
 #   endif
-#elif defined(XR_PLATFORM_APPLE)
-#   include <sys/types.h>
-#   include <sys/ptrace.h>
-#   define PTRACE_TRACEME PT_TRACE_ME
-#   define PTRACE_DETACH PT_DETACH
-#elif defined(XR_PLATFORM_BSD)
-#   include <sys/types.h>
-#   include <sys/ptrace.h>
-#   include <execinfo.h>
-#   include <cxxabi.h>
-#   include <dlfcn.h>
-#   define PTRACE_TRACEME PT_TRACE_ME
-#   define PTRACE_DETACH PT_DETACH
+
+#   include "Debug/dxerr.h"
 #endif
 
-#ifdef DEBUG
-#define USE_OWN_ERROR_MESSAGE_WINDOW
-#endif
+#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_APPLE) || defined(XR_PLATFORM_BSD)
+#   if __has_include(<sys/ptrace.h>)
+#       include <sys/ptrace.h>
+#       define PTRACE_AVAILABLE
 
-#if defined(XR_PLATFORM_WINDOWS)
-#   if defined(XR_ARCHITECTURE_X86)
-#       define MACHINE_TYPE IMAGE_FILE_MACHINE_I386
-#   elif defined(XR_ARCHITECTURE_X64)
-#       define MACHINE_TYPE IMAGE_FILE_MACHINE_AMD64
-#   elif defined(XR_ARCHITECTURE_ARM)
-#       define MACHINE_TYPE IMAGE_FILE_MACHINE_ARM
-#   elif defined(XR_ARCHITECTURE_ARM64)
-#       define MACHINE_TYPE IMAGE_FILE_MACHINE_ARM64
-#   elif defined(XR_ARCHITECTURE_IA64)
-#       define MACHINE_TYPE IMAGE_FILE_MACHINE_IA64
-#   else
-#       error CPU architecture is not supported.
+#       if defined(XR_PLATFORM_APPLE) || defined(XR_PLATFORM_BSD)
+#           define PTRACE_TRACEME PT_TRACE_ME
+#           define PTRACE_DETACH PT_DETACH
+#       endif
 #   endif
-#endif // XR_PLATFORM_WINDOWS
+#endif
 
 constexpr SDL_MessageBoxButtonData buttons[] =
 {
@@ -89,22 +52,8 @@ AssertionResult xrDebug::ShowMessage(pcstr title, pcstr message, bool simpleMode
 {
 #ifdef XR_PLATFORM_WINDOWS // because Windows default Message box is fancy
     HWND hwnd = nullptr;
-
     if (windowHandler)
-    {
-        SDL_SysWMinfo info;
-        SDL_VERSION(&info.version);
-        if (SDL_GetWindowWMInfo(windowHandler->GetApplicationWindow(), &info))
-        {
-            switch (info.subsystem)
-            {
-            case SDL_SYSWM_WINDOWS:
-                hwnd = info.info.win.window;
-                break;
-            default: break;
-            }
-        }
-    }
+        hwnd = static_cast<HWND>(windowHandler->GetApplicationWindowHandle());
 
     if (simpleMode)
     {
@@ -134,7 +83,7 @@ AssertionResult xrDebug::ShowMessage(pcstr title, pcstr message, bool simpleMode
     {
         SDL_MESSAGEBOX_ERROR,
         windowHandler ? windowHandler->GetApplicationWindow() : nullptr,
-        title, message, SDL_arraysize(buttons), buttons
+        title, message, SDL_arraysize(buttons), buttons, nullptr
     };
 
     int button = -1;
@@ -149,7 +98,7 @@ SDL_AssertState SDLAssertionHandler(const SDL_AssertData* data,
     if (data->always_ignore)
         return SDL_ASSERTION_ALWAYS_IGNORE;
 
-    constexpr pcstr desc = "SDL2 assertion triggered";
+    static constexpr pcstr desc = "SDL2 assertion triggered";
     bool alwaysIgnore = false;
 
     const auto result = xrDebug::Fail(alwaysIgnore,
@@ -180,202 +129,15 @@ xrDebug::UnhandledExceptionFilter xrDebug::PrevFilter = nullptr;
 xrDebug::OutOfMemoryCallbackFunc xrDebug::OutOfMemoryCallback = nullptr;
 string_path xrDebug::BugReportFile;
 bool xrDebug::ErrorAfterDialog = false;
-bool xrDebug::ShowErrorMessage = false;
+bool xrDebug::ShowErrorMessage = true;
 
-bool xrDebug::symEngineInitialized = false;
-Lock xrDebug::dbgHelpLock;
 #ifdef PROFILE_CRITICAL_SECTIONS
 Lock xrDebug::failLock(MUTEX_PROFILE_ID(xrDebug::Backend));
 #else
 Lock xrDebug::failLock;
 #endif
 
-#if defined(XR_PLATFORM_WINDOWS)
 void xrDebug::SetBugReportFile(const char* fileName) { xr_strcpy(BugReportFile, fileName); }
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
-void xrDebug::SetBugReportFile(const char* fileName) { xr_strcpy(BugReportFile, 0, fileName); }
-#else
-#   error Select or add implementation for your platform
-#endif
-
-#if defined(XR_PLATFORM_WINDOWS)
-bool xrDebug::GetNextStackFrameString(LPSTACKFRAME stackFrame, PCONTEXT threadCtx, xr_string& frameStr)
-{
-    BOOL result = StackWalk(MACHINE_TYPE, GetCurrentProcess(), GetCurrentThread(), stackFrame, threadCtx, nullptr,
-                            SymFunctionTableAccess, SymGetModuleBase, nullptr);
-
-    if (result == FALSE || stackFrame->AddrPC.Offset == 0)
-    {
-        return false;
-    }
-
-    frameStr.clear();
-    string512 formatBuff;
-
-    ///
-    /// Module name
-    ///
-    HINSTANCE hModule = (HINSTANCE)SymGetModuleBase(GetCurrentProcess(), stackFrame->AddrPC.Offset);
-    if (hModule && GetModuleFileName(hModule, formatBuff, _countof(formatBuff)))
-    {
-        frameStr.append(formatBuff);
-    }
-
-    ///
-    /// Address
-    ///
-    xr_sprintf(formatBuff, _countof(formatBuff), " at %p", stackFrame->AddrPC.Offset);
-    frameStr.append(formatBuff);
-
-    ///
-    /// Function info
-    ///
-    u8 arrSymBuffer[512];
-    ZeroMemory(arrSymBuffer, sizeof(arrSymBuffer));
-    PIMAGEHLP_SYMBOL functionInfo = reinterpret_cast<PIMAGEHLP_SYMBOL>(arrSymBuffer);
-    functionInfo->SizeOfStruct = sizeof(*functionInfo);
-    functionInfo->MaxNameLength = sizeof(arrSymBuffer) - sizeof(*functionInfo) + 1;
-    DWORD_PTR dwFunctionOffset;
-
-    result = SymGetSymFromAddr(GetCurrentProcess(), stackFrame->AddrPC.Offset, &dwFunctionOffset, functionInfo);
-
-    if (result)
-    {
-        if (dwFunctionOffset)
-        {
-            xr_sprintf(formatBuff, _countof(formatBuff), " %s() + %Iu byte(s)", functionInfo->Name, dwFunctionOffset);
-        }
-        else
-        {
-            xr_sprintf(formatBuff, _countof(formatBuff), " %s()", functionInfo->Name);
-        }
-        frameStr.append(formatBuff);
-    }
-
-    ///
-    /// Source info
-    ///
-    DWORD dwLineOffset;
-    IMAGEHLP_LINE sourceInfo = {};
-    sourceInfo.SizeOfStruct = sizeof(sourceInfo);
-
-    result = SymGetLineFromAddr(GetCurrentProcess(), stackFrame->AddrPC.Offset, &dwLineOffset, &sourceInfo);
-
-    if (result)
-    {
-        if (dwLineOffset)
-        {
-            xr_sprintf(formatBuff, _countof(formatBuff), " in %s line %u + %u byte(s)", sourceInfo.FileName,
-                       sourceInfo.LineNumber, dwLineOffset);
-        }
-        else
-        {
-            xr_sprintf(formatBuff, _countof(formatBuff), " in %s line %u", sourceInfo.FileName, sourceInfo.LineNumber);
-        }
-        frameStr.append(formatBuff);
-    }
-
-    return true;
-}
-
-bool xrDebug::InitializeSymbolEngine()
-{
-    if (!symEngineInitialized)
-    {
-        u32 dwOptions = SymGetOptions();
-        SymSetOptions(dwOptions | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
-
-        if (SymInitialize(GetCurrentProcess(), nullptr, TRUE))
-        {
-            symEngineInitialized = true;
-        }
-    }
-
-    return symEngineInitialized;
-}
-
-void xrDebug::DeinitializeSymbolEngine(void)
-{
-    if (symEngineInitialized)
-    {
-        SymCleanup(GetCurrentProcess());
-
-        symEngineInitialized = false;
-    }
-}
-
-xr_vector<xr_string> xrDebug::BuildStackTrace(PCONTEXT threadCtx, u16 maxFramesCount)
-{
-    ScopeLock Lock(&dbgHelpLock);
-
-    xr_vector<xr_string> traceResult;
-    xr_string frameStr;
-
-    if (!InitializeSymbolEngine())
-    {
-        Msg("[xrDebug::BuildStackTrace]InitializeSymbolEngine failed with error: %d", GetLastError());
-        return traceResult;
-    }
-
-    traceResult.reserve(maxFramesCount);
-
-    STACKFRAME stackFrame{};
-    stackFrame.AddrPC.Mode = AddrModeFlat;
-    stackFrame.AddrStack.Mode = AddrModeFlat;
-    stackFrame.AddrFrame.Mode = AddrModeFlat;
-    stackFrame.AddrBStore.Mode = AddrModeFlat;
-
-    // https://learn.microsoft.com/en-us/windows/win32/api/dbghelp/ns-dbghelp-stackframe
-    // https://github.com/reactos/reactos/blob/master/base/applications/drwtsn32/stacktrace.cpp
-#if defined XR_ARCHITECTURE_X86
-    stackFrame.AddrPC.Offset = threadCtx->Eip;
-    stackFrame.AddrStack.Offset = threadCtx->Esp;
-    stackFrame.AddrFrame.Offset = threadCtx->Ebp;
-#elif defined XR_ARCHITECTURE_X64
-    stackFrame.AddrPC.Offset = threadCtx->Rip;
-    stackFrame.AddrStack.Offset = threadCtx->Rsp;
-    stackFrame.AddrFrame.Offset = threadCtx->Rbp;
-#elif defined XR_ARCHITECTURE_ARM
-    stackFrame.AddrPC.Offset = threadCtx->Pc;
-    stackFrame.AddrStack.Offset = threadCtx->Sp;
-    stackFrame.AddrFrame.Offset = threadCtx->R11;
-#elif defined XR_ARCHITECTURE_ARM64
-    stackFrame.AddrPC.Offset = threadCtx->Pc;
-    stackFrame.AddrStack.Offset = threadCtx->Sp;
-    stackFrame.AddrFrame.Offset = threadCtx->Fp;
-#elif defined XR_ARCHITECTURE_IA64
-    stackFrame.AddrPC.Offset = threadCtx->StIIP;
-    stackFrame.AddrStack.Offset = threadCtx->IntSp;
-    stackFrame.AddrBStore.Offset = threadCtx->RsBSP;
-#else
-#   error CPU architecture is not supported.
-#endif
-
-    while (GetNextStackFrameString(&stackFrame, threadCtx, frameStr) && traceResult.size() <= maxFramesCount)
-    {
-        traceResult.push_back(frameStr);
-    }
-
-    DeinitializeSymbolEngine();
-
-    return traceResult;
-}
-#endif // defined(XR_PLATFORM_WINDOWS)
-
-xr_vector<xr_string> xrDebug::BuildStackTrace(u16 maxFramesCount)
-{
-#if defined(XR_PLATFORM_WINDOWS)
-    CONTEXT currentThreadCtx = {};
-
-    RtlCaptureContext(&currentThreadCtx); /// GetThreadContext can't be used on the current thread
-    currentThreadCtx.ContextFlags = CONTEXT_FULL;
-
-    return BuildStackTrace(&currentThreadCtx, maxFramesCount);
-#else
-#pragma todo("Implement stack trace for Linux")
-    return {"Implement stack trace for Linux"};
-#endif
-}
 
 void xrDebug::LogStackTrace(const char* header)
 {
@@ -427,7 +189,7 @@ void xrDebug::GatherInfo(char* assertionInfo, size_t bufferSize, const ErrorLoca
         }
     }
     buffer += xr_sprintf(buffer, oneAboveBuffer - buffer, "\n");
-    
+
     Log(assertionInfo);
     FlushLog();
 
@@ -436,54 +198,17 @@ void xrDebug::GatherInfo(char* assertionInfo, size_t bufferSize, const ErrorLoca
     if (DebuggerIsPresent() || !strstr(GetCommandLine(), "-no_call_stack_assert"))
         return;
 #endif
+
     Log("stack trace:\n");
-#ifdef USE_OWN_ERROR_MESSAGE_WINDOW
     buffer += xr_sprintf(buffer, oneAboveBuffer - buffer, "stack trace:\n\n");
-#endif // USE_OWN_ERROR_MESSAGE_WINDOW
-#if defined(XR_PLATFORM_WINDOWS)
+
     xr_vector<xr_string> stackTrace = BuildStackTrace();
     for (size_t i = 2; i < stackTrace.size(); i++)
     {
         Log(stackTrace[i].c_str());
-#ifdef USE_OWN_ERROR_MESSAGE_WINDOW
         buffer += xr_sprintf(buffer, oneAboveBuffer - buffer, "%s\n", stackTrace[i].c_str());
-#endif // USE_OWN_ERROR_MESSAGE_WINDOW
     }
-#elif defined(XR_PLATFORM_LINUX) && __has_include(<execinfo.h>) || defined(XR_PLATFORM_BSD)
-    void *array[20];
-    int nptrs = backtrace(array, 20);     // get void*'s for all entries on the stack
-    char **strings = backtrace_symbols(array, nptrs);
 
-    if (strings)
-    {
-        size_t demangledBufSize = 0;
-        char* demangledName = nullptr;
-        for (int i = 0; i < nptrs; i++)
-        {
-            char* functionName = strings[i];
-
-            Dl_info info;
-
-            if (dladdr(array[i], &info))
-            {
-                if (info.dli_sname)
-                {
-                    int status = -1;
-                    demangledName = abi::__cxa_demangle(info.dli_sname, demangledName, &demangledBufSize, &status);
-                    if (status == 0)
-                    {
-                        functionName = demangledName;
-                    }
-                }
-            }
-            Log(functionName);
-#   ifdef USE_OWN_ERROR_MESSAGE_WINDOW
-            buffer += xr_sprintf(buffer, bufferSize, "%s\n", functionName);
-#   endif // USE_OWN_ERROR_MESSAGE_WINDOW
-        }
-        ::free(demangledName);
-    }
-#endif
     FlushLog();
     os_clipboard::copy_to_clipboard(assertionInfo);
 }
@@ -580,6 +305,7 @@ AssertionResult xrDebug::Fail(bool& ignoreAlways, const ErrorLocation& loc, cons
     return Fail(ignoreAlways, loc, expr, desc.c_str(), arg1, arg2);
 }
 
+[[noreturn]]
 void xrDebug::DoExit(const std::string& message)
 {
     ScopeLock lock(&failLock);
@@ -611,7 +337,7 @@ void xrDebug::DoExit(const std::string& message)
         windowHandler->OnErrorDialog(false);
 }
 
-LPCSTR xrDebug::ErrorToString(long code)
+pcstr xrDebug::ErrorToString(long code)
 {
     const char* result = nullptr;
 #if defined(XR_PLATFORM_WINDOWS)
@@ -635,16 +361,17 @@ int out_of_memory_handler(size_t size)
     {
         Memory.mem_compact();
         const size_t processHeap = Memory.mem_usage();
-        const size_t ecoStrings = g_pStringContainer->stat_economy();
+        const auto [ecoStringsBytes, ecoStringsCount] = g_pStringContainer->stat_economy();
         const size_t ecoSmem = g_pSharedMemoryContainer->stat_economy();
         Msg("* [x-ray]: process heap[%zu K]", processHeap / 1024);
-        Msg("* [x-ray]: economy: strings[%zu K], smem[%zu K]", ecoStrings / 1024, ecoSmem);
+        Msg("* [x-ray]: shared strings: memory[%ld K], count[%lu]", ecoStringsBytes / 1024, ecoStringsCount);
+        Msg("* [x-ray]: shared memory[%ld K]", ecoSmem);
     }
     xrDebug::Fatal(DEBUG_INFO, "Out of memory. Memory request: %zu K", size / 1024);
     return 1;
 }
 
-extern LPCSTR log_name();
+extern pcstr log_name();
 
 void WINAPI xrDebug::PreErrorHandler(INT_PTR)
 {
@@ -713,11 +440,9 @@ void xrDebug::SetupExceptionHandler()
 
     if (strstr(commandLine, "-full_memory_dump"))
         minidumpFlags |= MiniDumpWithFullMemory | MiniDumpIgnoreInaccessibleMemory;
-#ifdef MASTER_GOLD
-    else if (!strstr(commandLine, "-detailed_minidump"))
-        minidumpFlags |= MiniDumpFilterMemory;
-#endif
-    
+    else if (strstr(commandLine, "-detailed_minidump"))
+        minidumpFlags |= MiniDumpWithIndirectlyReferencedMemory;
+
     BT_SetDumpType(minidumpFlags);
     //BT_SetSupportEMail("cop-crash-report@stalker-game.com");
     BT_SetSupportEMail("openxray@yahoo.com");
@@ -752,10 +477,12 @@ bool xrDebug::DebuggerIsPresent()
 {
 #ifdef XR_PLATFORM_WINDOWS
     return IsDebuggerPresent();
-#else
+#elif defined(PTRACE_AVAILABLE)
     if (ptrace(PTRACE_TRACEME, 0, 0, 0) == -1)
         return true;
     ptrace(PTRACE_DETACH, 0, 0, 0);
+    return false;
+#else
     return false;
 #endif
 }
@@ -820,13 +547,13 @@ LONG WINAPI xrDebug::UnhandledFilter(EXCEPTION_POINTERS* exPtrs)
     if (windowHandler)
         windowHandler->OnErrorDialog(true);
 
-    constexpr pcstr fatalError = "Fatal error";
+    static constexpr pcstr fatalError = "Fatal error";
 
     AssertionResult msgRes = AssertionResult::abort;
 
     if (!ErrorAfterDialog && ShowErrorMessage)
     {
-        constexpr pcstr msg = "Fatal error occurred\n\n"
+        static constexpr pcstr msg = "Fatal error occurred\n\n"
             "Press OK to abort program execution";
         msgRes = ShowMessage(fatalError, msg);
     }
@@ -863,7 +590,8 @@ LONG WINAPI xrDebug::UnhandledFilter(EXCEPTION_POINTERS* exPtrs)
 }
 
 #ifndef USE_BUG_TRAP
-void _terminate()
+[[noreturn]]
+void xr_terminate()
 {
 #if defined(XR_PLATFORM_WINDOWS)
     if (strstr(GetCommandLine(), "-silent_error_mode"))
@@ -913,65 +641,81 @@ static void invalid_parameter_handler(const wchar_t* expression, const wchar_t* 
 }
 #endif
 
-#if defined(XR_PLATFORM_WINDOWS)
-static void pure_call_handler() { handler_base("pure virtual function call"); }
-#endif
-
-#ifdef XRAY_USE_EXCEPTIONS
-static void unexpected_handler() { handler_base("unexpected program termination"); }
-#endif
-
-static void abort_handler(int signal) { handler_base("application is aborting"); }
-static void floating_point_handler(int signal) { handler_base("floating point error"); }
-static void illegal_instruction_handler(int signal) { handler_base("illegal instruction"); }
-static void segmentation_fault_handler(int signal) { handler_base("segmentation fault"); }
-static void termination_handler(int signal) { handler_base("termination with exit code 3"); }
-
 void xrDebug::OnThreadSpawn()
 {
-#if defined(XR_PLATFORM_WINDOWS)
-#ifdef USE_BUG_TRAP
-    BT_SetTerminate();
-#else
-    // std::set_terminate(_terminate);
-#endif
+#ifndef __SANITIZE_ADDRESS__
+    std::signal(SIGINT,  nullptr);
+    std::signal(SIGILL,  +[](int signal) { handler_base("illegal instruction"); });
+    std::signal(SIGFPE,  +[](int signal) { handler_base("floating point error"); });
+#   ifdef DEBUG
+    std::signal(SIGSEGV, +[](int signal) { handler_base("segmentation fault"); });
+#   endif
+    std::signal(SIGABRT, +[](int signal) { handler_base("application is aborting"); });
+    std::signal(SIGTERM, +[](int signal) { handler_base("termination with exit code 3"); });
+
+#   if defined(XR_PLATFORM_WINDOWS)
+    std::signal(SIGABRT_COMPAT, +[](int signal) { handler_base("application is aborting"); });
     _set_abort_behavior(0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
-    std::signal(SIGABRT, abort_handler);
-    std::signal(SIGABRT_COMPAT, abort_handler);
-    std::signal(SIGFPE, floating_point_handler);
-    std::signal(SIGILL, illegal_instruction_handler);
-    std::signal(SIGINT, 0);
-    std::signal(SIGTERM, termination_handler);
     _set_invalid_parameter_handler(&invalid_parameter_handler);
     _set_new_mode(1);
     _set_new_handler(&out_of_memory_handler);
-    _set_purecall_handler(&pure_call_handler);
-#if 0 // should be if we use exceptions
-    std::set_unexpected(_terminate);
+    _set_purecall_handler(+[] { handler_base("pure virtual function call"); });
+#   endif
+
+#   ifdef USE_BUG_TRAP
+    BT_SetTerminate();
+#   else
+    std::set_terminate(xr_terminate);
+#   endif
 #endif
-#else //XR_PLATFORM_WINDOWS
-    std::signal(SIGABRT, abort_handler);
-    std::signal(SIGFPE, floating_point_handler);
-    std::signal(SIGILL, illegal_instruction_handler);
-    std::signal(SIGINT, 0);
-    std::signal(SIGTERM, termination_handler);
-    std::signal(SIGSEGV, segmentation_fault_handler);
+}
+
+void xrDebug::OnThreadExit()
+{
+#ifndef __SANITIZE_ADDRESS__
+    std::signal(SIGINT,  nullptr);
+    std::signal(SIGILL,  nullptr);
+    std::signal(SIGFPE,  nullptr);
+    std::signal(SIGSEGV, nullptr);
+    std::signal(SIGABRT, nullptr);
+    std::signal(SIGTERM, nullptr);
+    std::set_terminate(nullptr);
+
+#   if defined(XR_PLATFORM_WINDOWS)
+    std::signal(SIGABRT_COMPAT, nullptr);
+    _set_abort_behavior(0, 0);
+    _set_invalid_parameter_handler(nullptr);
+    _set_new_mode(1);
+    _set_new_handler(nullptr);
+    _set_purecall_handler(nullptr);
+#   endif
 #endif
 }
 
 void xrDebug::Initialize(pcstr commandLine)
 {
+    ZoneScoped;
     *BugReportFile = 0;
     OnThreadSpawn();
     SetupExceptionHandler();
     SDL_SetAssertionHandler(SDLAssertionHandler, nullptr);
     // exception handler to all "unhandled" exceptions
 #if defined(XR_PLATFORM_WINDOWS)
-    PrevFilter = ::SetUnhandledExceptionFilter(UnhandledFilter);
+    PrevFilter = SetUnhandledExceptionFilter(UnhandledFilter);
 #endif
-#ifdef DEBUG
-    ShowErrorMessage = true;
-#else
+#ifdef MASTER_GOLD
     ShowErrorMessage = commandLine ? !!strstr(commandLine, "-show_error_window") : false;
+#endif
+}
+
+void xrDebug::Finalize()
+{
+    OnThreadExit();
+    SDL_SetAssertionHandler(nullptr, nullptr);
+#if defined(XR_PLATFORM_WINDOWS)
+    SetUnhandledExceptionFilter(nullptr);
+#endif
+#ifdef MASTER_GOLD
+    ShowErrorMessage = false;
 #endif
 }

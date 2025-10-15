@@ -2,6 +2,8 @@
 //////////////////////////////////////////////////////////////////////
 #pragma once
 
+namespace xray::render::RENDER_NAMESPACE
+{
 const int occ_dim_0 = 64;
 const int occ_dim_1 = occ_dim_0 / 2;
 const int occ_dim_2 = occ_dim_1 / 2;
@@ -63,7 +65,7 @@ public:
 
     void on_dbg_render();
 
-#ifdef DEBUG 
+#ifdef DEBUG
     struct pixel_box
     {
         Fvector center;
@@ -79,3 +81,4 @@ public:
 };
 
 extern occRasterizer Raster;
+} // namespace xray::render::RENDER_NAMESPACE

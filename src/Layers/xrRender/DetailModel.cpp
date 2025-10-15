@@ -2,6 +2,12 @@
 #pragma hdrstop
 #include "DetailModel.h"
 
+#if !defined(_EDITOR) && defined(USE_DX11)
+#include "xrstripify.h"
+#endif
+
+namespace xray::render::RENDER_NAMESPACE
+{
 CDetail::~CDetail() {}
 void CDetail::Unload()
 {
@@ -113,14 +119,12 @@ void CDetail::Load(IReader* S)
         bv_bb.modify(vertices[i].P);
     bv_bb.getsphere(bv_sphere.P, bv_sphere.R);
 
-#if !defined(_EDITOR) && (defined(USE_DX9) || defined(USE_DX11))
+#if !defined(_EDITOR) && defined(USE_DX11)
     Optimize();
 #endif
 }
 
-#if !defined(_EDITOR) && (defined(USE_DX9) || defined(USE_DX11))
-#include "xrstripify.h"
-
+#if !defined(_EDITOR) && defined(USE_DX11)
 void CDetail::Optimize()
 {
     xr_vector<u16> vec_indices, vec_permute;
@@ -147,3 +151,4 @@ void CDetail::Optimize()
     }
 }
 #endif
+} // namespace xray::render::RENDER_NAMESPACE

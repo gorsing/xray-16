@@ -199,8 +199,8 @@ void CSoundPlayer::play(
     **/
     sound_single.m_sound->clone((*I).second.second->random(id), st_Effect, sg_SourceType);
 
-    sound_single.m_sound->_p->g_object = m_object;
-    sound_single.m_sound->_p->g_userdata = (*I).second.first.m_data;
+    sound_single.m_sound->_get()->g_object = m_object;
+    sound_single.m_sound->_get()->g_userdata = (*I).second.first.m_data;
     VERIFY(sound_single.m_sound->_handle());
 
     VERIFY(max_start_time >= min_start_time);
@@ -283,14 +283,13 @@ CSoundPlayer::CSoundCollection::~CSoundCollection()
     delete_data(m_sounds);
 }
 
-const ref_sound& CSoundPlayer::CSoundCollection::random(const u32& id)
+const ref_sound& CSoundPlayer::CSoundCollection::random(u32 id)
 {
     VERIFY(!m_sounds.empty());
 
-    if (id != u32(-1))
+    if (id != u32(-1) && id < m_sounds.size())
     {
         m_last_sound_id = id;
-        VERIFY(id < m_sounds.size());
         return (*m_sounds[id]);
     }
 
@@ -307,5 +306,5 @@ const ref_sound& CSoundPlayer::CSoundCollection::random(const u32& id)
     } while (result == m_last_sound_id);
 
     m_last_sound_id = result;
-    return (*m_sounds[result]);
+    return *m_sounds[result];
 }

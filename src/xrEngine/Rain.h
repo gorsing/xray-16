@@ -8,15 +8,28 @@
 
 #include "xrCDB/xr_collide_defs.h"
 
+#include "Include/xrRender/FactoryPtr.h"
+#include "Include/xrRender/RainRender.h"
+
 // refs
 class ENGINE_API IRender_DetailModel;
 
-#include "Include/xrRender/FactoryPtr.h"
-#include "Include/xrRender/RainRender.h"
-//
+namespace xray::render
+{
+namespace render_r4
+{
+class dxRainRender;
+}
+namespace render_gl
+{
+class dxRainRender;
+}
+} // namespace xray::render
+
 class ENGINE_API CEffect_Rain
 {
-    friend class dxRainRender;
+    friend class xray::render::render_r4::dxRainRender;
+    friend class xray::render::render_gl::dxRainRender;
 
 private:
     struct Item
@@ -58,6 +71,7 @@ private:
 
     // Sounds
     ref_sound snd_Ambient;
+    float rain_hemi = 0.0f;
 
     // Utilities
     void p_create();
@@ -70,7 +84,7 @@ private:
     void p_free(Particle* P);
 
     // Some methods
-    void Born(Item& dest, float radius);
+    void Born(Item& dest, float radius, float speed);
     void Hit(Fvector& pos);
     bool RayPick(const Fvector& s, const Fvector& d, float& range, collide::rq_target tgt);
     void RenewItem(Item& dest, float height, bool bHit);
@@ -81,6 +95,8 @@ public:
 
     void Render();
     void OnFrame();
+
+    float GetRainHemi() { return rain_hemi; }
 };
 
 #endif // RainH

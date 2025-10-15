@@ -23,9 +23,9 @@ void CPHCollisionDamageReceiver::Init()
         CInifile::Sect& data = ini->r_section("collision_damage");
         for (const auto& item : data.Data)
         {
-            u16 index = K->LL_BoneID(*item.first);
-            R_ASSERT3(index != BI_NONE, "Wrong bone name", *item.first);
-            BoneInsert(index, float(atof(*item.second)));
+            u16 index = K->LL_BoneID(item.first.c_str());
+            R_ASSERT3(index != BI_NONE, "Wrong bone name", item.first.c_str());
+            BoneInsert(index, float(atof(item.second.c_str())));
             CODEGeom* og = sh->PPhysicsShell()->get_GeomByID(index);
             // R_ASSERT3(og, "collision damage bone has no physics collision", *item.first);
             if (og)
@@ -49,7 +49,7 @@ void CPHCollisionDamageReceiver::CollisionHit(u16 source_id, u16 bone_id, float 
     SHit HS;
 
     HS.GenHeader(GE_HIT, ph->ID()); //	ph->u_EventGen(P,GE_HIT,ph->ID());
-    HS.whoID = ph->ID(); //	P.w_u16		(ph->ID());
+    HS.whoID = source_id; //	P.w_u16		(ph->ID());
     HS.weaponID = source_id; //	P.w_u16		(source_id);
     HS.dir = dir; //	P.w_dir		(dir);
     HS.power = power; //	P.w_float	(power);

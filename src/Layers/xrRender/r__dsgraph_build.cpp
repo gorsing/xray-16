@@ -12,6 +12,8 @@
 #include "ParticleGroup.h"
 #include "FTreeVisual.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 using namespace R_dsgraph;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -37,6 +39,8 @@ ICF float CalcSSA(float& distSQ, Fvector& C, float R)
 
 void R_dsgraph_structure::insert_dynamic(IRenderable* root, dxRender_Visual* pVisual, Fmatrix& xform, Fvector& Center)
 {
+    ZoneScoped;
+
     CRender& RI = RImplementation;
 
     if (pVisual->vis.marker[context_id] == marker)
@@ -58,10 +62,14 @@ void R_dsgraph_structure::insert_dynamic(IRenderable* root, dxRender_Visual* pVi
     // a) Allow to optimize RT order
     // b) Should be rendered to special distort buffer in another pass
     VERIFY(pVisual->shader._get());
-    ShaderElement* sh_d = pVisual->shader->E[4]._get(); // 4=L_special
-    if (RImplementation.o.distortion && sh_d && sh_d->flags.bDistort && o.pmask[sh_d->flags.iPriority / 2])
+    const Shader* vis_sh = pVisual->shader._get();
+    ShaderElement* sh_d = vis_sh ? vis_sh->E[4]._get() : nullptr; // 4=L_special
+    if (sh_d)
     {
-        mapDistort.insert_anyway(distSQ, _MatrixItemS({ SSA, root, pVisual, xform, sh_d })); // sh_d -> L_special
+        if (RImplementation.o.distortion && sh_d && sh_d->flags.bDistort && o.pmask[sh_d->flags.iPriority / 2])
+        {
+            mapDistort.insert_anyway(distSQ, _MatrixItemS({ SSA, root, pVisual, xform, sh_d })); // sh_d -> L_special
+        }
     }
 
     // Select shader
@@ -82,7 +90,7 @@ void R_dsgraph_structure::insert_dynamic(IRenderable* root, dxRender_Visual* pVi
         mapHUD.insert_anyway(distSQ, _MatrixItemS({ SSA, root, pVisual, xform, sh }));
 
 #if RENDER != R_R1
-        if (sh->flags.bEmissive)
+        if (sh->flags.bEmissive && sh_d)
             mapHUDEmissive.insert_anyway(distSQ, _MatrixItemS({ SSA, root, pVisual, xform, sh_d })); // sh_d -> L_special
 #endif
         return;
@@ -148,6 +156,8 @@ void R_dsgraph_structure::insert_dynamic(IRenderable* root, dxRender_Visual* pVi
 
 void R_dsgraph_structure::insert_static(dxRender_Visual* pVisual)
 {
+    ZoneScoped;
+
     CRender& RI = RImplementation;
 
     if (pVisual->vis.marker[context_id] == marker)
@@ -169,10 +179,14 @@ void R_dsgraph_structure::insert_static(dxRender_Visual* pVisual)
     // a) Allow to optimize RT order
     // b) Should be rendered to special distort buffer in another pass
     VERIFY(pVisual->shader._get());
-    ShaderElement* sh_d = pVisual->shader->E[4]._get(); // 4=L_special
-    if (RImplementation.o.distortion && sh_d && sh_d->flags.bDistort && o.pmask[sh_d->flags.iPriority / 2])
+    const Shader* vis_sh = pVisual->shader._get();
+    ShaderElement* sh_d = vis_sh ? vis_sh->E[4]._get() : nullptr; // 4=L_special
+    if (sh_d)
     {
-        mapDistort.insert_anyway(distSQ, _MatrixItemS({ SSA, nullptr, pVisual, Fidentity, sh_d })); // sh_d -> L_special
+        if (RImplementation.o.distortion && sh_d && sh_d->flags.bDistort && o.pmask[sh_d->flags.iPriority / 2])
+        {
+            mapDistort.insert_anyway(distSQ, _MatrixItemS({ SSA, nullptr, pVisual, Fidentity, sh_d })); // sh_d -> L_special
+        }
     }
 
     // Select shader
@@ -197,7 +211,7 @@ void R_dsgraph_structure::insert_static(dxRender_Visual* pVisual)
     // b) Allow to make them 100% lit and really bright
     // c) Should not cast shadows
     // d) Should be rendered to accumulation buffer in the second pass
-    if (sh->flags.bEmissive)
+    if (sh->flags.bEmissive && sh_d)
     {
         mapEmissive.insert_anyway(distSQ, _MatrixItemS({ SSA, nullptr, pVisual, Fidentity, sh_d })); // sh_d -> L_special
     }
@@ -241,6 +255,8 @@ void R_dsgraph_structure::insert_static(dxRender_Visual* pVisual)
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 void R_dsgraph_structure::add_leafs_dynamic(IRenderable* root, dxRender_Visual* pVisual, Fmatrix& xform)
 {
+    ZoneScoped;
+
     if (nullptr == pVisual)
         return;
 
@@ -325,6 +341,8 @@ void R_dsgraph_structure::add_leafs_dynamic(IRenderable* root, dxRender_Visual* 
 
 void R_dsgraph_structure::add_leafs_static(dxRender_Visual* pVisual)
 {
+    ZoneScoped;
+
     if (o.use_hom && !RImplementation.HOM.visible(pVisual->vis))
         return;
 
@@ -526,10 +544,12 @@ BOOL R_dsgraph_structure::add_Dynamic(dxRender_Visual* pVisual, u32 planes) // n
 
 void R_dsgraph_structure::add_static(dxRender_Visual* pVisual, const CFrustum& view, u32 planes)
 {
+    ZoneScoped;
+
     vis_data& vis = pVisual->vis;
 
     // Check frustum visibility and calculate distance to visual's center
-    EFC_Visible VIS = view.testSAABB(vis.sphere.P, vis.sphere.R, vis.box.data(), planes);
+    const EFC_Visible VIS = view.testSAABB(vis.sphere.P, vis.sphere.R, vis.box.data(), planes);
     if (fcvNone == VIS)
         return;
 
@@ -541,7 +561,7 @@ void R_dsgraph_structure::add_static(dxRender_Visual* pVisual, const CFrustum& v
     {
     case MT_PARTICLE_GROUP:
     {
-        // Xottab_DUTY: for dynamic objects we need matrixб
+        // Xottab_DUTY: for dynamic objects we need matrix,
         // which is nullptr, when we use add_Static
         Log("Dynamic particles added via static procedure. Please, contact Xottab_DUTY and tell him about the issue.");
         NODEFAULT;
@@ -649,19 +669,21 @@ void R_dsgraph_structure::add_static(dxRender_Visual* pVisual, const CFrustum& v
 void R_dsgraph_structure::load(const xr_vector<CSector::level_sector_data_t>& sectors_data,
     const xr_vector<CPortal::level_portal_data_t>& portals_data)
 {
+    ZoneScoped;
+
     const auto portals_count = portals_data.size();
     const auto sectors_count = sectors_data.size();
 
     Sectors.resize(sectors_count);
     Portals.resize(portals_count);
 
-    for (int idx = 0; idx < portals_count; ++idx)
+    for (u32 idx = 0; idx < portals_count; ++idx)
     {
         auto* portal = xr_new<CPortal>();
         Portals[idx] = portal;
     }
 
-    for (int idx = 0; idx < sectors_count; ++idx)
+    for (u32 idx = 0; idx < sectors_count; ++idx)
     {
         auto* sector = xr_new<CSector>();
 
@@ -670,7 +692,7 @@ void R_dsgraph_structure::load(const xr_vector<CSector::level_sector_data_t>& se
         Sectors[idx] = sector;
     }
 
-    for (int idx = 0; idx < portals_count; ++idx)
+    for (u32 idx = 0; idx < portals_count; ++idx)
     {
         auto* portal = static_cast<CPortal*>(Portals[idx]);
 
@@ -693,6 +715,8 @@ void R_dsgraph_structure::unload()
 // sub-space rendering - main procedure
 void R_dsgraph_structure::build_subspace()
 {
+    ZoneScoped;
+
     marker++; // !!! critical here
 
     if (o.precise_portals && RImplementation.rmPortals)
@@ -767,7 +791,7 @@ void R_dsgraph_structure::build_subspace()
     if (collect_dynamic_any)
     {
         // Traverse object database
-        g_SpatialSpace->q_frustum(lstRenderables, o.spatial_traverse_flags, o.spatial_types, o.view_frustum);
+        g_pGamePersistent->SpatialSpace.q_frustum(lstRenderables, o.spatial_traverse_flags, o.spatial_types, o.view_frustum);
 
         if (o.spatial_traverse_flags & ISpatial_DB::O_ORDERED) // this should be inside of query functions
         {
@@ -934,3 +958,4 @@ void R_dsgraph_structure::build_subspace()
     }
 #endif
 }
+} // namespace xray::render::RENDER_NAMESPACE

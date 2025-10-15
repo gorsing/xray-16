@@ -49,7 +49,8 @@ void IBannedClient::Load(CInifile& ini, const shared_str& sect)
 
     tm _tm_banned;
     const shared_str& time_to = ini.r_string(sect, "time_to");
-    int res_t = sscanf(time_to.c_str(), "%02d.%02d.%d_%02d:%02d:%02d", &_tm_banned.tm_mday, &_tm_banned.tm_mon,
+
+    [[maybe_unused]] int res_t = sscanf(time_to.c_str(), "%02d.%02d.%d_%02d:%02d:%02d", &_tm_banned.tm_mday, &_tm_banned.tm_mon,
         &_tm_banned.tm_year, &_tm_banned.tm_hour, &_tm_banned.tm_min, &_tm_banned.tm_sec);
     VERIFY(res_t == 6);
 
@@ -286,10 +287,7 @@ IPureServer::EConnect IPureServer::Connect(pcstr options, GameDescriptionData& g
     //-------------------------------------------------------------------
 
     if (!psNET_direct_connect) {
-//---------------------------
-#ifdef DEBUG
-        string1024 tmp;
-#endif // DEBUG
+    //---------------------------
 
         bool bSimulator = false;
         if (strstr(Core.Params, "-netsim"))
@@ -693,4 +691,4 @@ void IPureServer::UpdateBannedList()
     }
 }
 
-pcstr IPureServer::GetBannedListName() const { return "banned_list_ip.ltx"; }
+constexpr pcstr IPureServer::GetBannedListName() { return "banned_list_ip.ltx"; }

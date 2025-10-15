@@ -1,5 +1,8 @@
 #include "stdafx.h"
 #include "uber_deffer.h"
+
+namespace xray::render::RENDER_NAMESPACE
+{
 void fix_texture_name(pstr fn);
 
 void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOOL _aref, LPCSTR _detail_replace,
@@ -7,7 +10,7 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
 {
     // Uber-parse
     string256 fname, fnameA, fnameB;
-    xr_strcpy(fname, *C.L_textures[0]); //. andy if (strext(fname)) *strext(fname)=0;
+    xr_strcpy(fname, C.L_textures[0].c_str()); //. andy if (strext(fname)) *strext(fname)=0;
     fix_texture_name(fname);
     ref_texture _t;
     _t.create(fname);
@@ -205,7 +208,7 @@ void uber_deffer(CBlender_Compile& C, bool hq, LPCSTR _vspec, LPCSTR _pspec, BOO
         C.r_dx11Texture("s_hemi", C.L_textures[2]);
         C.r_dx11Sampler("smp_rtlinear");
     }
-#elif defined(USE_DX9) || defined(USE_OGL)
+#elif defined(USE_OGL)
     C.r_Pass(vs, ps, FALSE);
     VERIFY(C.L_textures[0].size());
     if (bump)
@@ -247,7 +250,7 @@ void uber_shadow(CBlender_Compile& C, LPCSTR _vspec)
 {
     // Uber-parse
     string256 fname, fnameA, fnameB;
-    xr_strcpy(fname, *C.L_textures[0]); //. andy if (strext(fname)) *strext(fname)=0;
+    xr_strcpy(fname, C.L_textures[0].c_str()); //. andy if (strext(fname)) *strext(fname)=0;
     fix_texture_name(fname);
     ref_texture _t;
     _t.create(fname);
@@ -360,3 +363,4 @@ void uber_shadow(CBlender_Compile& C, LPCSTR _vspec)
         C.r_Pass("shadow_direct_base", "dumb", FALSE, TRUE, TRUE, FALSE);
 }
 #endif
+} // namespace xray::render::RENDER_NAMESPACE

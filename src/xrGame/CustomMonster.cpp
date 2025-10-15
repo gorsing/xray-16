@@ -62,9 +62,9 @@
 void SetActorVisibility(u16 who, float value);
 extern int g_AI_inactive_time;
 
-#ifndef MASTER_GOLD
+#if defined(DEBUG) || !defined(MASTER_GOLD)
 Flags32 psAI_Flags = {aiObstaclesAvoiding | aiUseSmartCovers};
-#endif // MASTER_GOLD
+#endif // defined(DEBUG) || !defined(MASTER_GOLD)
 
 void CCustomMonster::SAnimState::Create(IKinematicsAnimated* K, LPCSTR base)
 {
@@ -97,7 +97,6 @@ CCustomMonster::CCustomMonster()
     m_memory_manager = 0;
     m_movement_manager = 0;
     m_sound_player = 0;
-    m_already_dead = false;
     m_invulnerable = false;
     m_moving_object = 0;
 }
@@ -745,11 +744,16 @@ bool CCustomMonster::net_Spawn(CSE_Abstract* DC)
         else
         {
             Fvector dest_position;
-            u32 level_vertex_id;
-            level_vertex_id = movement().restrictions().accessible_nearest(
-                ai().level_graph().vertex_position(ai_location().level_vertex_id()), dest_position);
-            movement().set_level_dest_vertex(level_vertex_id);
-            movement().detail().set_dest_position(dest_position);
+            const Fvector vertex_pos = ai().level_graph().vertex_position(ai_location().level_vertex_id());
+            const u32 level_vertex_id = movement().restrictions().accessible_nearest(vertex_pos, dest_position);
+
+            const bool vertex_id_is_valid = ai().level_graph().valid_vertex_id(level_vertex_id);
+            VERIFY(vertex_id_is_valid);
+            if (vertex_id_is_valid)
+            {
+                movement().set_level_dest_vertex(level_vertex_id);
+                movement().detail().set_dest_position(dest_position);
+            }
         }
     }
 
@@ -884,7 +888,9 @@ void CCustomMonster::load_killer_clsids(LPCSTR section)
     m_killer_clsids.clear();
     LPCSTR killers = pSettings->r_string(section, "killer_clsids");
     string16 temp;
-    for (u32 i = 0, n = _GetItemCount(killers); i < n; ++i)
+    const u32 n = _GetItemCount(killers);
+    m_killer_clsids.reserve(n);
+    for (u32 i = 0; i < n; ++i)
         m_killer_clsids.push_back(TEXT2CLSID(_GetItem(killers, i, temp)));
 }
 
@@ -1196,7 +1202,7 @@ void CCustomMonster::OnRender()
 		float const jump_time	=	0.3f;
 		TransferenceToThrowVel	(velocity,jump_time,physics_world()->Gravity());
 
-		bool const result	=	trajectory_intersects_geometry	(jump_time, 
+		bool const result	=	trajectory_intersects_geometry	(jump_time,
 																 start,
 																 end,
 																 velocity,

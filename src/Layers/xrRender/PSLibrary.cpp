@@ -8,11 +8,14 @@
 #include "editors/ECore/Editor/ui_main.h"
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 bool ped_sort_pred(const PS::CPEDef* a, const PS::CPEDef* b) { return xr_strcmp(a->Name(), b->Name()) < 0; }
 bool pgd_sort_pred(const PS::CPGDef* a, const PS::CPGDef* b) { return xr_strcmp(a->m_Name, b->m_Name) < 0; }
 //----------------------------------------------------
 void CPSLibrary::OnCreate()
 {
+    ZoneScoped;
 #ifdef _EDITOR
     if (pCreateEAction)
     {
@@ -201,17 +204,21 @@ bool CPSLibrary::Load(const char* nm)
         return false;
     }
 
+    ZoneScoped;
+
     IReader* F = FS.r_open(nm);
     bool bRes = true;
     R_ASSERT(F->find_chunk(PS_CHUNK_VERSION));
     u16 ver = F->r_u16();
     if (ver != PS_VERSION)
         return false;
+
     // second generation
     IReader* OBJ;
     OBJ = F->open_chunk(PS_CHUNK_SECONDGEN);
     if (OBJ)
     {
+        ZoneScopedN("Second generation");
         IReader* O = OBJ->open_chunk(0);
         for (int count = 1; O; count++)
         {
@@ -230,10 +237,11 @@ bool CPSLibrary::Load(const char* nm)
         }
         OBJ->close();
     }
-    // second generation
+    // third generation
     OBJ = F->open_chunk(PS_CHUNK_THIRDGEN);
     if (OBJ)
     {
+        ZoneScopedN("Third generation");
         IReader* O = OBJ->open_chunk(0);
         for (int count = 1; O; count++)
         {
@@ -289,3 +297,4 @@ shared_str const& CPSLibrary::particles_group_id(CPGDef const& particles_group) 
 {
     return (particles_group.m_Name);
 }
+} // namespace xray::render::RENDER_NAMESPACE

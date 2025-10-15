@@ -13,7 +13,7 @@
 
 #include "Level.h"
 #include "xrMessages.h"
-#include "xrEngine/GameMtlLib.h"
+#include "xrMaterialSystem/GameMtlLib.h"
 
 #include "Include/xrRender/RenderVisual.h"
 
@@ -180,6 +180,12 @@ void CCustomRocket::create_physic_shell()
 // Rocket specific functions
 //////////////////////////////////////////////////////////////////////////
 
+#pragma warning(push)
+
+// XXX: maybe update ODE to a newer version
+// The warning happens on line 241: l_pMYU->last_pos[0] != -dInfinity
+#pragma warning(disable : 4756)
+
 void CCustomRocket::ObjectContactCallback(
     bool& do_colide, bool bo1, dContact& c, SGameMtl* material_1, SGameMtl* material_2)
 {
@@ -291,6 +297,7 @@ void CCustomRocket::ObjectContactCallback(
     {
     }
 }
+#pragma warning(pop)
 
 void CCustomRocket::Load(LPCSTR section)
 {
@@ -577,7 +584,7 @@ void CCustomRocket::StartEngineParticles()
     VERIFY(m_pEngineParticles == NULL);
     if (!m_sEngineParticles)
         return;
-    m_pEngineParticles = CParticlesObject::Create(*m_sEngineParticles, FALSE);
+    m_pEngineParticles = CParticlesObject::Create(m_sEngineParticles.c_str(), FALSE);
 
     UpdateParticles();
     m_pEngineParticles->Play(false);
@@ -601,13 +608,13 @@ void CCustomRocket::StartFlyParticles()
 
     if (!m_sFlyParticles)
         return;
-    m_pFlyParticles = CParticlesObject::Create(*m_sFlyParticles, FALSE);
+    m_pFlyParticles = CParticlesObject::Create(m_sFlyParticles.c_str(), FALSE);
 
     UpdateParticles();
     m_pFlyParticles->Play(false);
 
     VERIFY(m_pFlyParticles);
-    VERIFY3(m_pFlyParticles->IsLooped(), "must be a looped particle system for rocket fly: %s", *m_sFlyParticles);
+    VERIFY3(m_pFlyParticles->IsLooped(), "must be a looped particle system for rocket fly: %s", m_sFlyParticles.c_str());
 }
 void CCustomRocket::StopFlyParticles()
 {

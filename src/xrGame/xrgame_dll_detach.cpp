@@ -24,6 +24,9 @@
 
 #include "sound_collection_storage.h"
 #include "relation_registry.h"
+#include "script_properties_list_helper.h"
+
+extern CScriptPropertiesListHelper* g_property_list_helper;
 
 typedef xr_vector<std::pair<shared_str, int>> STORY_PAIRS;
 extern STORY_PAIRS story_ids;
@@ -35,6 +38,8 @@ extern void InitHudSoundSettings();
 #include "xrEngine/IGame_Persistent.h"
 void init_game_globals()
 {
+    ZoneScoped;
+
     InitHudSoundSettings();
     if (!GEnv.isDedicatedServer)
     {
@@ -52,6 +57,8 @@ void init_game_globals()
 
 void clean_game_globals()
 {
+    xr_delete(g_property_list_helper);
+
     // destroy ai space
     xr_delete(g_ai_space);
     // destroy object factory

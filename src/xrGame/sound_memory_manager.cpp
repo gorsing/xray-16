@@ -85,22 +85,22 @@ IC void CSoundMemoryManager::update_sound_threshold()
     VERIFY(_valid(m_min_sound_threshold));
     VERIFY(!fis_zero(m_decrease_factor));
     VERIFY(m_sound_decrease_quant);
-    // t = max(t*f^((tc - tl)/tq),min_threshold)
-    m_sound_threshold =
-        _max(m_self_sound_factor * m_sound_threshold * exp(float(Device.dwTimeGlobal - m_last_sound_time) /
-                                                           float(m_sound_decrease_quant) * log(m_decrease_factor)),
-            m_min_sound_threshold);
+    // t = std::max(t*f^((tc - tl)/tq),min_threshold)
+
+    const float exponent = std::exp(float(Device.dwTimeGlobal - m_last_sound_time) / float(m_sound_decrease_quant) * std::log(m_decrease_factor));
+
+    m_sound_threshold = std::max(m_self_sound_factor * m_sound_threshold * exponent, m_min_sound_threshold);
+
     VERIFY(_valid(m_sound_threshold));
 }
 
 IC u32 CSoundMemoryManager::priority(const MemorySpace::CSoundObject& sound) const
 {
     u32 priority = u32(-1);
-    xr_map<ESoundTypes, u32>::const_iterator I = m_priorities.begin();
-    xr_map<ESoundTypes, u32>::const_iterator E = m_priorities.end();
-    for (; I != E; ++I)
-        if (((*I).second < priority) && ((*I).first & sound.m_sound_type) == (*I).first)
-            priority = (*I).second;
+    for (const auto [type, prio] : m_priorities)
+        if ((prio < priority) && (type & sound.m_sound_type) == type)
+            priority = prio;
+
     return (priority);
 }
 

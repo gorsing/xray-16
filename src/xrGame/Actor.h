@@ -8,6 +8,7 @@
 #include "actor_defs.h"
 #include "fire_disp_controller.h"
 #include "entity_alive.h"
+#include "game_news.h"
 #include "PHMovementControl.h"
 #include "xrPhysics/PhysicsShell.h"
 #include "InventoryOwner.h"
@@ -128,7 +129,7 @@ protected:
 
     struct SDefNewsMsg
     {
-        GAME_NEWS_DATA* news_data;
+        GAME_NEWS_DATA news_data;
         u32 time;
         bool operator<(const SDefNewsMsg& other) const { return time > other.time; }
     };
@@ -136,8 +137,8 @@ protected:
     void UpdateDefferedMessages();
 
 public:
-    void AddGameNews_deffered(GAME_NEWS_DATA& news_data, u32 delay);
-    virtual void AddGameNews(GAME_NEWS_DATA& news_data);
+    void AddGameNews_deffered(GAME_NEWS_DATA&& news_data, u32 delay);
+    virtual void AddGameNews(GAME_NEWS_DATA&& news_data);
     void ClearGameNews();
 
 protected:
@@ -254,7 +255,7 @@ public:
     void detach_Vehicle();
     void steer_Vehicle(float angle);
     void attach_Vehicle(CHolderCustom* vehicle);
-    bool use_MountedWeapon(CHolderCustom* object);
+    bool use_HolderEx(CHolderCustom* object, bool bForce);
     virtual bool can_attach(const CInventoryItem* inventory_item) const;
 
 protected:
@@ -333,6 +334,9 @@ protected:
     void cam_UnsetLadder();
     float currentFOV();
 
+    void UpdateVisorRainDrops();
+    void UpdateVisor();
+
     // Cameras
     CCameraBase* cameras[eacMaxCam];
     EActorCameras cam_active;
@@ -354,7 +358,8 @@ public:
 
     CGameObject* ObjectWeLookingAt() { return m_pObjectWeLookingAt; }
     CInventoryOwner* PersonWeLookingAt() { return m_pPersonWeLookingAt; }
-    LPCSTR GetDefaultActionForObject() { return *m_sDefaultObjAction; }
+    pcstr GetDefaultActionForObject() const { return m_sDefaultObjAction.c_str(); }
+
 protected:
     CGameObject* m_pUsableObject;
     // Person we're looking at
@@ -412,6 +417,9 @@ public:
     bool AnyMove() { return (mstate_real & mcAnyMove) != 0; };
     bool is_jump();
     u32 MovingState() const { return mstate_real; }
+    float m_dropsIntensity{};
+    float m_dropsAnimIncrementor{};
+
 protected:
     u32 mstate_wishful;
     u32 mstate_old;
@@ -438,17 +446,17 @@ public:
     // User input/output
     //////////////////////////////////////////////////////////////////////////
 public:
-    void OnAxisMove(float x, float y, float scale, bool invert);
+    void OnAxisMove(float x, float y, float scaleX, float scaleY, bool invertX, bool invertY);
     virtual void IR_OnMouseMove(int x, int y);
-    virtual void IR_OnMouseWheel(int x, int y);
+    virtual void IR_OnMouseWheel(float x, float y);
 
     virtual void IR_OnKeyboardPress(int dik);
     virtual void IR_OnKeyboardRelease(int dik);
     virtual void IR_OnKeyboardHold(int dik);
 
-    void IR_OnControllerPress(int dik, float x, float y) override;
-    void IR_OnControllerRelease(int dik, float x, float y) override;
-    void IR_OnControllerHold(int dik, float x, float y) override;
+    void IR_OnControllerPress(int dik, const ControllerAxisState& state) override;
+    void IR_OnControllerRelease(int dik, const ControllerAxisState& state) override;
+    void IR_OnControllerHold(int dik, const ControllerAxisState& state) override;
 
     void IR_OnControllerAttitudeChange(Fvector change) override;
 
@@ -803,6 +811,9 @@ private:
     {
         mstate_wishful = state;
     }
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CGameObject);
 };
 
 extern bool isActorAccelerated(u32 mstate, bool ZoomMode);

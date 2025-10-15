@@ -1,7 +1,7 @@
 #pragma once
+
 #include "xrUICore/Windows/UIFrameLineWnd.h"
 
-class CUITextWnd;
 class CUIStatic;
 
 class XRUICORE_API CUIListBoxItem : public CUIFrameLineWnd, public CUISelectable
@@ -10,8 +10,10 @@ class XRUICORE_API CUIListBoxItem : public CUIFrameLineWnd, public CUISelectable
 
 public:
     CUIListBoxItem(float height);
+    ~CUIListBoxItem() override;
 
     virtual void Draw();
+    bool OnKeyboardAction(int dik, EUIMessages keyboard_action) override;
     virtual bool OnMouseDown(int mouse_btn);
     virtual void OnFocusReceive();
     void InitDefault();
@@ -21,10 +23,10 @@ public:
     void SetData(void* data);
     void* GetData();
 
-    CUITextWnd* AddTextField(LPCSTR txt, float width);
+    CUIStatic* AddTextField(LPCSTR txt, float width);
     CUIStatic* AddIconField(float width);
 
-    CUITextWnd* GetTextItem() { return m_text; }
+    CUIStatic* GetTextItem() const { return m_text; }
     // TextControl
     void SetText(LPCSTR txt);
     LPCSTR GetText();
@@ -36,8 +38,11 @@ public:
     pcstr GetDebugType() override { return "CUIListBoxItem"; }
 
 protected:
-    CUITextWnd* m_text;
+    CUIStatic* m_text;
     u32 tag;
     void* pData;
     float FieldsLength() const;
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CUIFrameLineWnd);
 };

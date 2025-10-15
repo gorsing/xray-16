@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class DX11TestHelper
 {
     SDL_Window* m_window = nullptr;
@@ -34,6 +36,8 @@ public:
 
 BOOL xrRender_test_hw()
 {
+    ZoneScoped;
+
     const DX11TestHelper helper;
     if (!helper.Successful())
         return FALSE;
@@ -45,3 +49,4 @@ BOOL xrRender_test_hw()
         return TRUE;
     return FALSE;
 }
+} // namespace xray::render::RENDER_NAMESPACE

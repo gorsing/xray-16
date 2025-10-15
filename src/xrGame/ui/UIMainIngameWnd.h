@@ -29,7 +29,7 @@ public:
 
 protected:
     CUIStatic* UIStaticDiskIO{};
-    CUITextWnd* UIStaticQuickHelp{};
+    CUIStatic* UIStaticQuickHelp{};
     CUIMotionIcon* UIMotionIcon{};
     CUIZoneMap* UIZoneMap{};
 
@@ -65,7 +65,7 @@ public:
     void OnSectorChanged(IRender_Sector::sector_id_t sector);
 
     xr_vector<CUIStatic*> m_quick_slots_icons;
-    xr_vector<CUITextWnd*> m_quick_slots_texts;
+    xr_vector<CUIStatic*> m_quick_slots_texts;
 
 protected:
     // 5 статиков для отображения иконок:
@@ -125,7 +125,7 @@ public:
     void AnimateContacts(bool b_snd);
     HUD_SOUND_ITEM m_contactSnd;
 
-    void ReceiveNews(GAME_NEWS_DATA* news);
+    void ReceiveNews(const GAME_NEWS_DATA* news);
     void UpdateMainIndicators();
     void UpdateBoosterIndicators(const CEntityCondition::BOOSTER_MAP& influences);
 

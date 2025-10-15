@@ -122,18 +122,15 @@ void CBaseMonster::Load(LPCSTR section)
     //------------------------------------
     // Protections
     //------------------------------------
+    has_protections_sect = pSettings->line_exist(section, "protections_sect");
     m_fSkinArmor = 0.f;
     m_fHitFracMonster = 0.1f;
-    if (pSettings->line_exist(section, "protections_sect"))
+
+    if (has_protections_sect)
     {
-        LPCSTR protections_sect = pSettings->r_string(section, "protections_sect");
-        m_fSkinArmor = READ_IF_EXISTS(pSettings, r_float, protections_sect, "skin_armor", 0.f);
-        float defaultHitFraction = 0.1f;
-        if (ShadowOfChernobylMode || ClearSkyMode)
-        {
-            defaultHitFraction = pSettings->read_if_exists<float>(protections_sect, "hit_fraction", defaultHitFraction);
-        }
-        m_fHitFracMonster = pSettings->read_if_exists<float>(protections_sect, "hit_fraction_monster", defaultHitFraction);
+        const auto protections_sect = pSettings->r_string(section, "protections_sect");
+        m_fSkinArmor = pSettings->read_if_exists<float>(protections_sect, "skin_armor", 0.f);
+        m_fHitFracMonster = pSettings->read_if_exists<float>(protections_sect, "hit_fraction_monster", 0.1f);
     }
 
     m_force_anti_aim = false;
@@ -204,10 +201,7 @@ steering_behaviour::manager* CBaseMonster::get_steer_manager()
 void CBaseMonster::reload(LPCSTR section)
 {
     CCustomMonster::reload(section);
-
-    if (!CCustomMonster::use_simplified_visual())
-        CStepManager::reload(section);
-
+    CStepManager::reload(section);
     CInventoryOwner::reload(section);
     movement().reload(section);
 
@@ -327,11 +321,8 @@ bool CBaseMonster::net_Spawn(CSE_Abstract* DC)
         "There is no AI-Map, level graph, cross table, or graph is not compiled into the game graph!");
     monster_squad().register_member((u8)g_Team(), (u8)g_Squad(), (u8)g_Group(), this);
     settings_overrides();
-    
-    CHARACTER_COMMUNITY community;
-    community.set("monster", true);
-    if (community.index() != NO_COMMUNITY_INDEX)
-        CInventoryOwner::SetCommunity(community.index());
+
+    CInventoryOwner::SetMonsterCommunity();
 
     if (GetScriptControl())
     {

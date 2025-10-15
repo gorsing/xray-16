@@ -3,16 +3,12 @@
 //////////////////////////////////////////////////////////////////////
 
 #pragma once
-#ifndef IINPUTRECEIVERH
-#define IINPUTRECEIVERH
-#include "xrCore/_flags.h"
-#include "xrEngine/xr_level_controller.h"
 
-// fwd. decl.
-template <class T>
-struct _vector2;
-using Fvector2 = _vector2<float>;
-using Ivector2 = _vector2<int>;
+#include "xrCore/_flags.h"
+
+// despite being unused in this file, it's almost always used in IR_* functions
+// so it's logically correct to include it
+#include "xr_level_controller.h"
 
 class ENGINE_API IInputReceiver
 {
@@ -31,7 +27,7 @@ public:
     virtual void IR_OnMousePress(int /*btn*/) {}
     virtual void IR_OnMouseRelease(int /*btn*/) {}
     virtual void IR_OnMouseHold(int /*btn*/) {}
-    virtual void IR_OnMouseWheel(int /*x*/, int /*y*/) {}
+    virtual void IR_OnMouseWheel(float /*x*/, float /*y*/) {}
     virtual void IR_OnMouseMove(int /*x*/, int /*y*/) {}
 
     virtual void IR_OnKeyboardPress(int /*dik*/) {}
@@ -39,9 +35,9 @@ public:
     virtual void IR_OnKeyboardHold(int /*dik*/) {}
     virtual void IR_OnTextInput(pcstr /*text*/) {}
 
-    virtual void IR_OnControllerPress(int /*dik*/, float /*x*/, float /*y*/) {}
-    virtual void IR_OnControllerRelease(int /*dik*/, float /*x*/, float /*y*/) {}
-    virtual void IR_OnControllerHold(int /*dik*/, float /*x*/, float /*y*/) {}
+    virtual void IR_OnControllerPress(int /*dik*/, const ControllerAxisState& /*state*/) {}
+    virtual void IR_OnControllerRelease(int /*dik*/, const ControllerAxisState& /*state*/) {}
+    virtual void IR_OnControllerHold(int /*dik*/, const ControllerAxisState& /*state*/) {}
 
     virtual void IR_OnControllerAttitudeChange(Fvector /*change*/) {}
 };
@@ -50,14 +46,20 @@ ENGINE_API extern float psMouseSens;
 ENGINE_API extern float psMouseSensScale;
 ENGINE_API extern Flags32 psMouseInvert;
 
-ENGINE_API extern float psControllerStickSens;
+ENGINE_API extern float psControllerStickSensX;
+ENGINE_API extern float psControllerStickSensY;
 ENGINE_API extern float psControllerStickSensScale;
-ENGINE_API extern float psControllerStickDeadZone;
+ENGINE_API extern float psControllerStickInnerDeadZone;
+ENGINE_API extern float psControllerStickOuterDeadZone;
+ENGINE_API extern float psControllerStickAngularDeadZone;
 ENGINE_API extern float psControllerSensorSens;
 ENGINE_API extern float psControllerSensorDeadZone;
-ENGINE_API extern Flags32 psControllerInvertY;
-ENGINE_API extern Flags32 psControllerEnableSensors;
-
 ENGINE_API extern float psControllerCursorAutohideTime;
+ENGINE_API extern Flags32 psControllerFlags;
 
-#endif
+enum EControllerFlags
+{
+    ControllerInvertX,
+    ControllerInvertY,
+    ControllerEnableSensors,
+};

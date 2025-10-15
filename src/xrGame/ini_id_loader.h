@@ -62,8 +62,8 @@ protected:
     static LPCSTR line_name;
 
 public:
-    CIni_IdToIndex();
-    virtual ~CIni_IdToIndex();
+    CIni_IdToIndex() = default;
+    virtual ~CIni_IdToIndex() = default;
 
     static void InitInternal();
     static const ITEM_DATA* GetById(const T_ID& str_id, bool no_assert = false);
@@ -94,10 +94,6 @@ TEMPLATE_SPECIALIZATION
 LPCSTR CSINI_IdToIndex::line_name = NULL;
 
 TEMPLATE_SPECIALIZATION
-CSINI_IdToIndex::CIni_IdToIndex() {}
-TEMPLATE_SPECIALIZATION
-CSINI_IdToIndex::~CIni_IdToIndex() {}
-TEMPLATE_SPECIALIZATION
 const ITEM_DATA* CSINI_IdToIndex::GetById(const T_ID& str_id, bool no_assert)
 {
     typename T_VECTOR::iterator it;
@@ -109,7 +105,7 @@ const ITEM_DATA* CSINI_IdToIndex::GetById(const T_ID& str_id, bool no_assert)
 
     if (m_pItemDataVector->end() == it)
     {
-        R_ASSERT3(no_assert, "item not found, id", *str_id);
+        R_ASSERT3(no_assert, "item not found, id", str_id.c_str());
         return NULL;
     }
 

@@ -1,17 +1,18 @@
 #include "pch.hpp"
 #include "UIFrameLineWnd.h"
 #include "XML/UITextureMaster.h"
+#include "xrEngine/editor_helper.h"
 
 CUIFrameLineWnd::CUIFrameLineWnd(pcstr window_name)
-    : CUIWindow(window_name), bHorizontal(true), m_bTextureVisible(false)
+    : CUIWindow(window_name), m_bTextureVisible(false), bHorizontal(true)
 {
     m_texture_color = color_argb(255, 255, 255, 255);
 }
 
-bool CUIFrameLineWnd::InitFrameLineWnd(LPCSTR base_name, Fvector2 pos, Fvector2 size, bool horizontal, bool fatal /*= true*/)
+bool CUIFrameLineWnd::InitFrameLineWnd(pcstr base_name, Fvector2 pos, Fvector2 size, bool horizontal, bool fatal /*= true*/)
 {
     InitFrameLineWnd(pos, size, horizontal);
-    return InitTexture(base_name, "hud" DELIMITER "default", fatal);
+    return InitTexture(base_name, fatal);
 }
 
 void CUIFrameLineWnd::InitFrameLineWnd(Fvector2 pos, Fvector2 size, bool horizontal)
@@ -24,12 +25,11 @@ void CUIFrameLineWnd::InitFrameLineWnd(Fvector2 pos, Fvector2 size, bool horizon
 
 bool CUIFrameLineWnd::InitTexture(pcstr texture, bool fatal /*= true*/)
 {
-    return InitTexture(texture, "hud" DELIMITER "default", fatal);
+    return InitTextureEx(texture, "hud" DELIMITER "default", fatal);
 }
 
-bool CUIFrameLineWnd::InitTexture(pcstr texture, pcstr shader, bool fatal /*= true*/)
+bool CUIFrameLineWnd::InitTextureEx(pcstr texture, pcstr shader, bool fatal /*= true*/)
 {
-    dbg_tex_name = texture;
     string256 buf;
 
     const bool back_exist = CUITextureMaster::InitTexture(strconcat(sizeof(buf), buf, texture, "_back"), shader, m_shader, m_tex_rect[flBack]);
@@ -125,8 +125,8 @@ void CUIFrameLineWnd::DrawElements()
 {
     GEnv.UIRender->SetShader(*m_shader);
 
-    Fvector2 ts;
-    GEnv.UIRender->GetActiveTextureResolution(ts);
+    Fvector2 ts{};
+    m_shader->GetBaseTextureResolution(ts);
 
     Frect rect;
     GetAbsoluteRect(rect);
@@ -169,6 +169,32 @@ void CUIFrameLineWnd::DrawElements()
         };
     }
     GEnv.UIRender->FlushPrimitive();
+}
+
+bool CUIFrameLineWnd::FillDebugTree(const CUIDebugState& debugState)
+{
+    return CUIWindow::FillDebugTree(debugState);
+}
+
+void CUIFrameLineWnd::FillDebugInfo()
+{
+#ifndef MASTER_GOLD
+    CUIWindow::FillDebugInfo();
+
+    if (!ImGui::CollapsingHeader(CUIFrameLineWnd::GetDebugType()))
+        return;
+
+    ImGui::Checkbox("Texture visible", &m_bTextureVisible);
+
+    ImGui::SameLine();
+    ImGui::Checkbox("Horizontal", &bHorizontal);
+
+    xray::imgui::ColorEdit4("Texture color", m_texture_color);
+
+    ImGui::DragFloat4("Texture rect: back", reinterpret_cast<float*>(&m_tex_rect[flBack]));
+    ImGui::DragFloat4("Texture rect: first", reinterpret_cast<float*>(&m_tex_rect[flFirst]));
+    ImGui::DragFloat4("Texture rect: second", reinterpret_cast<float*>(&m_tex_rect[flSecond]));
+#endif
 }
 
 bool CUIFrameLineWnd::inc_pos(

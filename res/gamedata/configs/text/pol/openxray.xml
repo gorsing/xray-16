@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="windows-1251" ?>
+<?xml version="1.0" encoding="windows-1250" ?>
 <string_table>
 	<string id="st_unload_magazine_all">
 		<text>rozіaduj wszystkie bronie</text>
@@ -13,7 +13,7 @@
 		<text>Wczytywanie oњwietlenia</text>
 	</string>
 	<string id="st_client_connecting_to">
-		<text>Klient: Czenie z</text>
+		<text>Klient: Ј№czenie z</text>
 	</string>
 	<string id="st_client_spawning">
 		<text>Klient: Odradzanie</text>
@@ -25,7 +25,7 @@
 		<text>Tworzenie nowej gry</text>
 	</string>
 	<string id="ui_mm_always_active">
-		<text>Zawsze aktywny</text>
+		<text>Dziaіanie w tle (Alt+Tab)</text>
 	</string>
 	<string id="ui_mm_detail_radius">
 		<text>Odlegіoњж rys. trawy</text>
@@ -45,17 +45,26 @@
 	<string id="ui_mm_loadingstages">
 		<text>Postкp wczytywania</text>
 	</string>
-	<string id="renderer_gl">
+	<string id="renderer_rgl">
 		<text>Rozsz. peіne oњw. dynam. (OpenGL)</text>
 	</string>
-	<string id="ui_mm_r2_fxaa">
-		<text>FXAA</text>
+	<string id="ui_mm_window_mode">
+		<text>Tryb wyњwietlania</text>
+	</string>
+	<string id="st_opt_windowed">
+		<text>Okienkowy</text>
+	</string>
+	<string id="st_opt_windowed_borderless">
+		<text>Okienkowy (bez ramek)</text>
+	</string>
+	<string id="st_opt_fullscreen">
+		<text>Peіnoekranowy</text>
+	</string>
+	<string id="st_opt_fullscreen_borderless">
+		<text>Peіnoekranowy (szybki Alt+Tab)</text>
 	</string>
 	<string id="ui_mm_r2_smap_size">
 		<text>Jakoњж cieni map</text>
-	</string>
-	<string id="ui_mm_r3_dynamic_wet_surfaces_opt">
-		<text>Optymalizacja mokrych pow.</text>
 	</string>
 	<string id="ui_mm_r3_dynamic_wet_surfaces_near">
 		<text>Mokre pow. na blisk. odlegіoњci</text>
@@ -67,16 +76,67 @@
 		<text>Jakoњж mokrych powierzchni</text>
 	</string>
 	<string id="ui_mm_fov">
-		<text>Pole widzenia</text>
+		<text>K№t widzenia</text>
 	</string>
-	<string id="st_switch_version_invitation">
-		<text>Czy na pewno chcesz uruchomic kolejna wersje gry?</text>
-	</string>		
+	<string id="ui_mm_hud_fov">
+		<text>K№t widzenia HUD</text>
+	</string>
 	<string id="ui_mm_localization">
 		<text>Jкzyk</text>
 	</string>
 	<string id="ui_mm_gamepad_setup">
 		<text>Konfiguracja gamepada</text>
+	</string>
+	<string id="ui_mm_fps_limit">
+		<text>Limit FPS w grze</text>
+	</string>
+	<string id="ui_mm_fps_limit_in_menu">
+		<text>Limit FPS w menu</text>
+	</string>
+	<string id="ui_mm_shader_preset">
+		<text>Tryb graficzny</text>
+	</string>
+	<string id="ui_mm_shader_preset_vanilla">
+		<text>Vanilla</text>
+	</string>
+	<string id="ui_mm_shader_preset_enhanced_default">
+		<text>Rozszerzany (Domyњlny)</text>
+	</string>
+	<string id="ui_mm_shader_preset_enhanced_high">
+		<text>Rozszerzany (Wysoki)</text>
+	</string>
+	<string id="ui_mm_color_grading_preset">
+		<text>Kolorystyka</text>
+	</string>
+	<string id="ui_mm_color_grading_default">
+		<text>Domyњlna</text>
+	</string>
+	<string id="ui_mm_color_grading_cold">
+		<text>Chіodna</text>
+	</string>
+	<string id="ui_mm_color_grading_filmic_01">
+		<text>Filmic 1</text>
+	</string>
+	<string id="ui_mm_color_grading_filmic_02">
+		<text>Filmic 2</text>
+	</string>
+	<string id="ui_mm_color_grading_filmic_03">
+		<text>Filmic 3</text>
+	</string>
+	<string id="ui_mm_color_grading_hollywood">
+		<text>Hollywood</text>
+	</string>
+	<string id="ui_mm_color_grading_vanilla">
+		<text>Vanilla</text>
+	</string>
+	<string id="ui_mm_color_grading_vibrant">
+		<text>Vibrant</text>
+	</string>
+	<string id="ui_mm_color_grading_warm">
+		<text>Ciepіa</text>
+	</string>
+	<string id="cze">
+    	<text>Czeski (Czech)</text>
 	</string>
 	<string id="eng">
 		<text>Angielski (English)</text>
@@ -86,6 +146,9 @@
 	</string>
 	<string id="ger">
 		<text>Niemiecki (German)</text>
+	</string>
+	<string id="jpn">
+    	<text>Japoсski (Japanese)</text>
 	</string>
 	<string id="ita">
 		<text>Wіoski (Italian)</text>
@@ -98,5 +161,8 @@
 	</string>
 	<string id="spa">
 		<text>Hiszpaсski (Spanish)</text>
+	</string>
+	<string id="ukr">
+    	<text>Ukraiсski (Ukrainian)</text>
 	</string>
 </string_table>

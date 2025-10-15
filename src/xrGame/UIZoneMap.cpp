@@ -18,13 +18,15 @@
 #include "ui/UIInventoryUtilities.h"
 //////////////////////////////////////////////////////////////////////////
 
-void CUIZoneMap::Init()
+void CUIZoneMap::Init(bool motionIconAttached)
 {
+    ZoneScoped;
+
     CUIXml uiXml;
     uiXml.Load(CONFIG_PATH, UI_PATH, UI_PATH_DEFAULT, "zone_map.xml");
 
     CUIXmlInit::InitStatic(uiXml, "minimap:background", 0, &m_background);
-    CUIXmlInit::InitWindow(uiXml, "minimap:level_frame", 0, &m_clipFrame);
+    CUIXmlInit::InitStatic(uiXml, "minimap:level_frame", 0, &m_clipFrame);
     CUIXmlInit::InitStatic(uiXml, "minimap:center", 0, &m_center);
 
     m_clock_wnd = UIHelper::CreateStatic(uiXml, "minimap:clock_wnd", &m_background, false);
@@ -39,10 +41,7 @@ void CUIZoneMap::Init()
     m_activeMap->SetAutoDelete(true);
     m_activeMap->EnableHeading(true);
 
-    // Clear Sky and Shadow of Chernobyl compatibility
-    // Check for m_pointerDistanceText reduces flexibility
-    // But it's all we can, probably.
-    m_activeMap->SetRounded(!m_pointerDistanceText);
+    m_activeMap->SetRounded(motionIconAttached);
 
     CUIXmlInit::InitStatic(uiXml, "minimap:compass", 0, &m_compass);
     m_background.AttachChild(&m_compass);
@@ -55,7 +54,7 @@ void CUIZoneMap::Init()
     Fvector2 temp;
     const float k = UI().get_current_kx();
 
-    if (m_clipFrame.WndRectIsProbablyRelative())
+    if (motionIconAttached)
     {
         temp = m_clipFrame.GetWndSize();
         temp.y *= UI_BASE_HEIGHT * k;
@@ -66,7 +65,7 @@ void CUIZoneMap::Init()
         m_clipFrame.SetWndPos(temp.mul(UI_BASE_HEIGHT));
     }
 
-    if (m_background.WndSizeIsProbablyRelative())
+    if (motionIconAttached)
     {
         m_background.SetHeight(m_background.GetHeight() * UI_BASE_HEIGHT);
         m_background.SetWidth(m_background.GetHeight() * k);
@@ -78,14 +77,14 @@ void CUIZoneMap::Init()
     temp = m_clipFrame.GetWndSize();
     m_center.SetWndPos(temp.div(2.0f));
 
-    if (m_compass.WndPosIsProbablyRelative())
+    if (motionIconAttached)
     {
         temp = m_compass.GetWndPos();
         temp.mul(m_background.GetWndSize());
         m_compass.SetWndPos(temp);
     }
 
-    if (m_clock_wnd && m_clock_wnd->WndPosIsProbablyRelative())
+    if (m_clock_wnd && motionIconAttached)
     {
         temp = m_clock_wnd->GetWndPos();
         temp.mul(m_background.GetWndSize());
@@ -96,10 +95,10 @@ void CUIZoneMap::Init()
     {
         CUIXmlInit::InitStatic(uiXml, "minimap:static_counter", 0, &m_Counter);
         m_background.AttachChild(&m_Counter);
-        CUIXmlInit::InitTextWnd(uiXml, "minimap:static_counter:text_static", 0, &m_Counter_text);
+        CUIXmlInit::InitStatic(uiXml, "minimap:static_counter:text_static", 0, &m_Counter_text);
         m_Counter.AttachChild(&m_Counter_text);
 
-        if (m_Counter.WndPosIsProbablyRelative())
+        if (motionIconAttached)
         {
             temp = m_Counter.GetWndPos();
             temp.mul(m_background.GetWndSize());
@@ -119,7 +118,7 @@ void CUIZoneMap::Render()
 
 void CUIZoneMap::Update()
 {
-    CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
+    const auto* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
     if (!pActor)
         return;
 
@@ -128,10 +127,9 @@ void CUIZoneMap::Update()
         string16 text_str;
         xr_strcpy(text_str, sizeof(text_str), "");
 
-        CPda* pda = pActor->GetPDA();
-        if (pda)
+        if (CPda* pda = pActor->GetPDA())
         {
-            u32 cn = pda->ActiveContactsNum();
+            const u32 cn = pda->ActiveContactsNum();
             if (cn > 0)
             {
                 xr_sprintf(text_str, sizeof(text_str), "%d", cn);
@@ -147,8 +145,7 @@ void CUIZoneMap::Update()
 
     if (m_clock_wnd)
     {
-        m_clock_wnd->TextItemControl()->SetText(
-            InventoryUtilities::GetGameTimeAsString(InventoryUtilities::etpTimeToMinutes).c_str());
+        m_clock_wnd->SetText(GetGameTimeAsString(InventoryUtilities::etpTimeToMinutes).c_str());
     }
 }
 
@@ -181,6 +178,7 @@ void CUIZoneMap::UpdateRadar(Fvector pos)
 
 bool CUIZoneMap::ZoomIn() { return true; }
 bool CUIZoneMap::ZoomOut() { return true; }
+
 void CUIZoneMap::SetupCurrentMap()
 {
     m_activeMap->Initialize(Level().name(), "hud" DELIMITER "default");
@@ -192,7 +190,7 @@ void CUIZoneMap::SetupCurrentMap()
     Fvector2 wnd_size;
     float zoom_factor = float(m_clipFrame.GetWidth()) / 100.0f;
 
-    LPCSTR ln = Level().name().c_str();
+    cpcstr ln = Level().name().c_str();
     if (pGameIni->section_exist(ln))
     {
         if (pGameIni->line_exist(ln, "minimap_zoom"))

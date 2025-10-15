@@ -13,9 +13,8 @@
 #include "GameObject.h"
 #include "relation_registry.h"
 
-CAI_PhraseDialogManager::CAI_PhraseDialogManager(void) { m_sStartDialog = m_sDefaultStartDialog = NULL; }
-CAI_PhraseDialogManager::~CAI_PhraseDialogManager(void) {}
-// PhraseDialogManager
+CAI_PhraseDialogManager::CAI_PhraseDialogManager() = default;
+
 void CAI_PhraseDialogManager::ReceivePhrase(DIALOG_SHARED_PTR& phrase_dialog)
 {
     AnswerPhrase(phrase_dialog);
@@ -78,8 +77,8 @@ void CAI_PhraseDialogManager::UpdateAvailableDialogs(CPhraseDialogManager* partn
     m_AvailableDialogs.clear();
     m_CheckedDialogs.clear();
 
-    if (*m_sStartDialog)
-        inherited::AddAvailableDialog(*m_sStartDialog, partner);
+    if (m_sStartDialog.c_str())
+        inherited::AddAvailableDialog(m_sStartDialog.c_str(), partner);
     inherited::AddAvailableDialog("hello_dialog", partner);
 
     inherited::UpdateAvailableDialogs(partner);

@@ -8,8 +8,11 @@
 #include "Include/xrAPI/xrAPI.h"
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void CResourceManager::reset_begin()
 {
+    ZoneScoped;
     // destroy state-blocks
     for (SState* sstate : v_states)
         _RELEASE(sstate->state);
@@ -33,6 +36,7 @@ bool cmp_rt(const CRT* A, const CRT* B) { return A->_order < B->_order; }
 
 void CResourceManager::reset_end()
 {
+    ZoneScoped;
     // create RDStreams
     RImplementation.Vertex.reset_end();
     RImplementation.Index.reset_end();
@@ -43,20 +47,20 @@ void CResourceManager::reset_end()
     {
         for (u32 _it = 0; _it < v_geoms.size(); _it++)
         {
-            SGeometry* _G = v_geoms[_it];
-            if (_G->vb == RImplementation.Vertex.old_pVB)
-                _G->vb = RImplementation.Vertex.Buffer();
+            SGeometry* geom = v_geoms[_it];
+            if (geom->vb == RImplementation.Vertex.old_pVB)
+                geom->vb = RImplementation.Vertex.Buffer();
 
             // Here we may recover the buffer using one of
             // RCache's index buffers.
             // Do not remove else.
-            if (_G->ib == RImplementation.Index.old_pIB)
+            if (geom->ib == RImplementation.Index.old_pIB)
             {
-                _G->ib = RImplementation.Index.Buffer();
+                geom->ib = RImplementation.Index.Buffer();
             }
-            else if (_G->ib == RImplementation.old_QuadIB)
+            else if (geom->ib == RImplementation.old_QuadIB)
             {
-                _G->ib = RImplementation.QuadIB;
+                geom->ib = RImplementation.QuadIB;
             }
         }
     }
@@ -88,12 +92,6 @@ void CResourceManager::reset_end()
     {
         sstate->state_code.record(sstate->state);
     }
-
-    // create everything, renderer may use
-    GEnv.Render->reset_end();
-#ifndef MASTER_GOLD
-    Dump(true);
-#endif
 }
 
 template <class C>
@@ -128,11 +126,10 @@ void CResourceManager::Dump(bool bBrief)
     Msg("* RM_Dump: ps        : %d", m_ps.size());
     if (!bBrief)
         mdump(m_ps);
-#if defined(USE_DX11) || defined(USE_OGL)
     Msg("* RM_Dump: gs        : %d", m_gs.size());
     if (!bBrief)
         mdump(m_gs);
-#    ifdef USE_DX11
+#ifdef USE_DX11
     Msg("* RM_Dump: cs        : %d", m_cs.size());
     if (!bBrief)
         mdump(m_cs);
@@ -142,7 +139,6 @@ void CResourceManager::Dump(bool bBrief)
     Msg("* RM_Dump: ds        : %d", m_ds.size());
     if (!bBrief)
         mdump(m_ds);
-#    endif
 #endif
     Msg("* RM_Dump: dcl       : %d", v_declarations.size());
     Msg("* RM_Dump: states    : %d", v_states.size());
@@ -153,3 +149,4 @@ void CResourceManager::Dump(bool bBrief)
     Msg("* RM_Dump: v_elements: %d", v_elements.size());
     Msg("* RM_Dump: v_shaders : %d", v_shaders.size());
 }
+} // namespace xray::render::RENDER_NAMESPACE

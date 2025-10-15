@@ -17,14 +17,14 @@ template <typename _object_type>
 class CPropertyEvaluator
 {
 public:
-    typedef GraphEngineSpace::_solver_condition_type _condition_type;
-    typedef GraphEngineSpace::_solver_value_type _value_type;
+    using _condition_type = GraphEngineSpace::_solver_condition_type;
+    using _value_type = GraphEngineSpace::_solver_value_type;
 
 public:
     _object_type* m_object;
     CPropertyStorage* m_storage;
 #if 1//def LOG_ACTION //Alundaio: m_evaluator_name
-    LPCSTR m_evaluator_name;
+    pcstr m_evaluator_name;
 #endif
 
 public:
@@ -39,6 +39,12 @@ public:
     virtual void save(NET_Packet& packet) {}
     virtual void load(IReader& packet) {}
 };
-typedef CPropertyEvaluator<CScriptGameObject> CScriptPropertyEvaluator;
+
+using CScriptPropertyEvaluator = CPropertyEvaluator<CScriptGameObject>;
+
+struct CScriptPropertyEvaluatorExport
+{
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
+};
 
 #include "property_evaluator_inline.h"

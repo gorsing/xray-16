@@ -10,13 +10,18 @@ class CUIListBoxItem;
 class XRUICORE_API CUIComboBox final : public CUIWindow, public CUIOptionsItem, public pureRender
 {
     friend class CUIXmlInitBase;
-    typedef enum { LIST_EXPANDED, LIST_FONDED } E_COMBO_STATE;
+
+    enum E_COMBO_STATE : u8
+    {
+        LIST_EXPANDED,
+        LIST_FONDED
+    };
 
     xr_vector<int> m_disabled;
 
 public:
     CUIComboBox();
-    virtual ~CUIComboBox();
+    ~CUIComboBox() override;
 
     // CUIOptionsItem
     virtual void SetCurrentOptValue(); // opt->current
@@ -27,7 +32,7 @@ public:
 
     virtual void OnRender(); // only for list-box
 
-    LPCSTR GetText();
+    LPCSTR GetText() const;
     LPCSTR GetTextOf(int index);
     void SetText(LPCSTR text);
 
@@ -37,6 +42,10 @@ public:
     void InitComboBox(Fvector2 pos, float width);
     void SetItemIDX(int idx);
     void SetItemToken(int tok);
+    u32 GetSelectedIDX();
+    void SetSelectedIDX(u32 idx);
+
+    bool SetNextItemSelected(bool next, bool loop);
 
     virtual void SendMessage(CUIWindow* pWnd, s16 msg, void* pData = 0);
     virtual void OnFocusLost();
@@ -49,6 +58,8 @@ public:
 
 protected:
     virtual bool OnMouseAction(float x, float y, EUIMessages mouse_action);
+    bool OnKeyboardAction(int dik, EUIMessages keyboard_action) override;
+    bool OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action) override;
     virtual void OnBtnClicked();
     void ShowList(bool bShow);
     void OnListItemSelect();
@@ -58,17 +69,17 @@ protected:
 public:
     void ClearList();
 
-    u32 GetSize();
+    u32 GetSize() const;
 
 protected:
-    bool m_bInited;
     int m_iListHeight;
     int m_itoken_id;
-    E_COMBO_STATE m_eState;
     int m_opt_backup_value;
+    E_COMBO_STATE m_eState;
+    bool m_bInited;
 
     CUI_IB_FrameLineWnd m_frameLine;
-    CUITextWnd m_text;
+    CUIStatic m_text{ "Text" };
     CUIFrameWindow m_list_frame{ "List frame" };
 
     u32 m_textColor[2];
@@ -77,4 +88,7 @@ public:
     CUIListBox m_list_box;
     void SetTextColor(u32 color) { m_textColor[0] = color; };
     void SetTextColorD(u32 color) { m_textColor[1] = color; };
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CUIWindow);
 };

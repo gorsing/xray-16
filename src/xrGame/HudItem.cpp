@@ -75,7 +75,6 @@ void CHudItem::renderable_Render(u32 context_id, IRenderable* root)
         if (!object().H_Parent() || (!_hud_render && !IsHidden()))
         {
             on_renderable_Render(context_id, root);
-            debug_draw_firedeps();
         }
         else if (object().H_Parent())
         {
@@ -144,6 +143,12 @@ void CHudItem::OnStateSwitch(u32 S, u32 oldState)
 
 void CHudItem::OnAnimationEnd(u32 state)
 {
+    if (const auto actor = smart_cast<CActor*>(object().H_Parent()))
+    {
+        actor->callback(GameObject::eActorHudAnimationEnd)(
+            smart_cast<CGameObject*>(this)->lua_game_object(),
+            hud_sect.c_str(), m_current_motion.c_str(), state, animation_slot());
+    }
     switch (state)
     {
     case eBore: { SwitchState(eIdle);
@@ -374,7 +379,7 @@ bool CHudItem::TryPlayAnimIdle()
 }
 
 //AVO: check if animation exists
-bool CHudItem::isHUDAnimationExist(pcstr anim_name) const
+bool CHudItem::isHUDAnimationExist(pcstr anim_name, bool silent) const
 {
     if (const auto* data = HudItemData()) // First person
     {
@@ -394,16 +399,17 @@ bool CHudItem::isHUDAnimationExist(pcstr anim_name) const
     else
         return false; // No hud section, no warning
 #ifdef DEBUG
-    Msg("~ [WARNING] ------ Animation [%s] does not exist in [%s]", anim_name, HudSection().c_str());
+    if (!silent)
+        Msg("~ [WARNING] ------ Animation [%s] does not exist in [%s]", anim_name, HudSection().c_str());
 #endif
     return false;
 }
 
-pcstr CHudItem::WhichHUDAnimationExist(pcstr anim_name, pcstr anim_name2) const
+pcstr CHudItem::WhichHUDAnimationExist(pcstr anim_name, pcstr anim_name2, bool silent) const
 {
-    if (isHUDAnimationExist(anim_name))
+    if (isHUDAnimationExist(anim_name, silent))
         return anim_name;
-    if (isHUDAnimationExist(anim_name2))
+    if (isHUDAnimationExist(anim_name2, silent))
         return anim_name2;
     return nullptr;
 }
@@ -429,6 +435,55 @@ void CHudItem::OnMovementChanged(ACTOR_DEFS::EMoveCommand cmd)
             ResetSubStateTime();
         }
     }
+}
+
+extern ENGINE_API float psHUD_FOV;
+void CHudItem::TransformPosFromWorldToHud(Fvector& worldPos)
+{
+    CActor* actor = smart_cast<CActor*>(object().H_Parent());
+
+    Fmatrix mView;
+    mView.set(Device.mView);
+    if (GetHUDmode() && actor)
+    {
+        Fmatrix trans;
+        actor->Cameras().hud_camera_Matrix(trans);
+        mView.build_camera_dir(trans.c, trans.k, trans.j);
+    }
+
+    Fmatrix hud_project;
+    hud_project.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT, HUD_VIEWPORT_NEAR,
+        g_pGamePersistent->Environment().CurrentEnv.far_plane);
+
+    mView.transform_tiny(worldPos);
+    hud_project.transform_tiny(worldPos);
+
+    Fmatrix().set(Device.mProject).invert().transform_tiny(worldPos);
+    Fmatrix().set(mView).invert().transform_tiny(worldPos);
+}
+
+void CHudItem::TransformDirFromWorldToHud(Fvector& worldDir)
+{
+    CActor* actor = smart_cast<CActor*>(object().H_Parent());
+
+    Fmatrix mView;
+    mView.set(Device.mView);
+    if (GetHUDmode() && actor)
+    {
+        Fmatrix trans;
+        actor->Cameras().hud_camera_Matrix(trans);
+        mView.build_camera_dir(trans.c, trans.k, trans.j);
+    }
+
+    Fmatrix hud_project;
+    hud_project.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT, HUD_VIEWPORT_NEAR,
+        g_pGamePersistent->Environment().CurrentEnv.far_plane);
+
+    mView.transform_dir(worldDir);
+    hud_project.transform_dir(worldDir);
+
+    Fmatrix().set(Device.mProject).invert().transform_dir(worldDir);
+    Fmatrix().set(mView).invert().transform_dir(worldDir);
 }
 
 attachable_hud_item* CHudItem::HudItemData() const

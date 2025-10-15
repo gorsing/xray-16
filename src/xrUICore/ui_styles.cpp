@@ -10,6 +10,8 @@ UIStyleManager* UIStyles = nullptr;
 
 UIStyleManager::UIStyleManager()
 {
+    ZoneScoped;
+
     m_token.emplace_back(DEFAULT_UI_STYLE_NAME, DEFAULT_STYLE_ID);
 
     string_path path;
@@ -72,12 +74,7 @@ void UIStyleManager::SetupStyle(u32 styleID)
     if (DefaultStyleIsSet())
         return;
 
-    pcstr selectedStyle = nullptr;
-    for (const auto& token : m_token)
-    {
-        if (token.id == m_style_id)
-            selectedStyle = token.name;
-    }
+    pcstr selectedStyle = GetCurrentStyleName();
 
     string_path selectedStylePath;
     strconcat(selectedStylePath, UI_PATH_DEFAULT, DELIMITER "styles" DELIMITER, selectedStyle);
@@ -89,17 +86,31 @@ void UIStyleManager::SetupStyle(u32 styleID)
 
 void UIStyleManager::Reset()
 {
-    // Hack: activate main menu to prevent crash
-    // I don't know why it crashes while in the game
-    bool shouldHideMainMenu = false;
-    if (g_pGamePersistent && g_pGamePersistent->m_pMainMenu)
-    {
-        shouldHideMainMenu = !g_pGamePersistent->m_pMainMenu->IsActive();
-        g_pGamePersistent->m_pMainMenu->Activate(true);
-    }
-
     Device.seqUIReset.Process();
+}
 
-    if (shouldHideMainMenu)
-        g_pGamePersistent->m_pMainMenu->Activate(false);
+bool UIStyleManager::SetStyle(pcstr name, bool reloadUI)
+{
+    for (const auto& token : m_token)
+    {
+        if (0 == xr_strcmp(token.name, name))
+        {
+            SetupStyle(token.id);
+            if (reloadUI)
+                Reset();
+            return true;
+        }
+    }
+    return false;
+}
+
+pcstr UIStyleManager::GetCurrentStyleName() const
+{
+    for (const auto& token : m_token)
+    {
+        if (token.id == static_cast<int>(m_style_id))
+            return token.name;
+    }
+    VERIFY(!"Could not retrieve current style name!");
+    return nullptr;
 }

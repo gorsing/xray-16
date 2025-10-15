@@ -1,10 +1,5 @@
-//----------------------------------------------------
-// file: DrawUtils.h
-//----------------------------------------------------
-
 #pragma once
-#ifndef DrawUtilsH
-#define DrawUtilsH
+
 #include "xrCore/xr_types.h"
 // tamlin WIP
 //#include "xrCore/_vector3d.h"
@@ -18,9 +13,7 @@ template <class T>
 struct _vector3;
 typedef _vector3<float> Fvector;
 
-template <class T>
-struct _obb;
-typedef _obb<float> Fobb;
+struct Fobb;
 
 //----------------------------------------------------
 // Utilities
@@ -104,5 +97,3 @@ public:
 
     virtual void OnDeviceDestroy() = 0;
 };
-//----------------------------------------------------
-#endif

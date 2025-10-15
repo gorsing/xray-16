@@ -41,6 +41,7 @@ private:
     bool m_bMakeScreenshot;
     int m_iLMScreenshotFragment;
     bool m_bMakeLevelMap;
+    shared_str m_CurrentWeatherCycle;
 
     float m_fSpeed0;
     float m_fSpeed1;
@@ -63,7 +64,7 @@ public:
     CDemoRecord(const char* name, float life_time = 60 * 60 * 1000);
     virtual ~CDemoRecord();
 
-    void OnAxisMove(float x, float y, float scale, bool invert);
+    void OnAxisMove(float x, float y, float scaleX, float scaleY, bool invertX, bool invertY);
     virtual void IR_OnMouseMove(int dx, int dy);
     virtual void IR_OnMouseHold(int btn);
 
@@ -71,9 +72,9 @@ public:
     virtual void IR_OnKeyboardHold(int dik);
     virtual void IR_OnKeyboardRelease(int dik);
 
-    void IR_OnControllerPress(int key, float x, float y) override;
-    void IR_OnControllerHold(int key, float x, float y) override;
-    void IR_OnControllerRelease(int key, float x, float y) override;
+    void IR_OnControllerPress(int key, const ControllerAxisState& state) override;
+    void IR_OnControllerHold(int key, const ControllerAxisState& state) override;
+    void IR_OnControllerRelease(int key, const ControllerAxisState& state) override;
 
     void IR_OnControllerAttitudeChange(Fvector change) override;
 

@@ -8,7 +8,6 @@
 
 #include "StdAfx.h"
 #pragma hdrstop
-#pragma pack(push, 4)
 
 #include "xrServer_Objects_Abstract.h"
 #include "xrMessages.h"
@@ -81,7 +80,7 @@ void CSE_Visual::FillProps(LPCSTR pref, PropItemVec& items)
         PHelper().CreateChoose(items, PrepareKey(pref, abstract->name(), "Model" DELIMITER "Visual"), &visual_name, smVisual);
     V->OnChangeEvent.bind(this, &CSE_Visual::OnChangeVisual);
     V = PHelper().CreateChoose(items, PrepareKey(pref, abstract->name(), "Model" DELIMITER "Animation"), &startup_animation,
-        smSkeletonAnims, nullptr, (void*)*visual_name);
+        smSkeletonAnims, nullptr, (void*)visual_name.c_str());
     V->OnChangeEvent.bind(this, &CSE_Visual::OnChangeAnim);
     PHelper().CreateFlag8(items, PrepareKey(pref, abstract->name(), "Model" DELIMITER "Obstacle"), &flags, flObstacle);
 }
@@ -112,5 +111,3 @@ void CSE_Motion::FillProps(LPCSTR pref, PropItemVec& items)
     V->OnChangeEvent.bind(this, &CSE_Motion::OnChangeMotion);
 }
 #endif // #ifndef MASTER_GOLD
-
-#pragma pack(pop)

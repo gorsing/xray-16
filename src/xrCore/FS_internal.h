@@ -36,9 +36,13 @@ public:
         if (exclusive)
         {
             const int handle = _sopen(conv_fn, _O_WRONLY | _O_TRUNC | _O_CREAT | _O_BINARY, SH_DENYWR);
-#ifdef _EDITOR
+#ifndef MASTER_GOLD
             if (handle == -1)
-                Msg("! Can't create file: '%s'. Error: '%s'.", conv_fn, _sys_errlist[errno]);
+            {
+                string1024 error;
+                xr_strerror(errno, error, sizeof(error));
+                Msg("! Can't create file: '%s'. Error: '%s'.", conv_fn, error);
+            }
 #endif
             hf = _fdopen(handle, "wb");
         }
@@ -143,7 +147,7 @@ class CVirtualFileReader final : public IReader
 private:
 #if defined(XR_PLATFORM_WINDOWS)
     void *hSrcFile, *hSrcMap;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     int hSrcFile;
 #else
 #   error Select or add implementation for your platform

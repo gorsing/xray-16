@@ -114,9 +114,9 @@ BOOL CScriptDebugger::Active() { return m_bIdePresent; }
 CScriptDebugger::CScriptDebugger(CScriptEngine* scriptEngine)
 {
     this->scriptEngine = scriptEngine;
-    m_threads = new CDbgScriptThreads(scriptEngine, this);
-    m_callStack = new CScriptCallStack(this);
-    m_lua = new CDbgLuaHelper(this);
+    m_threads = xr_new<CDbgScriptThreads>(scriptEngine, this);
+    m_callStack = xr_new<CScriptCallStack>(this);
+    m_lua = xr_new<CDbgLuaHelper>(this);
     ZeroMemory(m_curr_connected_mslot, sizeof(m_curr_connected_mslot));
     //	m_pDebugger					= this;
     m_nLevel = 0;
@@ -383,7 +383,7 @@ bool CScriptDebugger::HasBreakPoint(const char* fileName, s32 lineNum)
     for (size_t i = 0; i < m_breakPoints.size(); i++)
     {
         SBreakPoint bp(m_breakPoints[i]);
-        if (bp.nLine == lineNum && xr_strlen(bp.fileName) == filenameLength && !xr_stricmp(*bp.fileName, sFileName))
+        if (bp.nLine == lineNum && xr_strlen(bp.fileName) == filenameLength && !xr_stricmp(bp.fileName.c_str(), sFileName))
             return true;
     }
     return false;

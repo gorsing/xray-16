@@ -5,19 +5,21 @@
 #include "xrCore/Threading/ParallelFor.hpp"
 
 #ifndef _EDITOR
-#if defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K)
+#if defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K) || defined(XR_ARCHITECTURE_PPC64)
 #include <xmmintrin.h>
 #elif defined(XR_ARCHITECTURE_ARM) || defined(XR_ARCHITECTURE_ARM64)
 #include "sse2neon/sse2neon.h"
+#elif defined(XR_ARCHITECTURE_RISCV)
+#include "sse2rvv/sse2rvv.h"
 #else
 #error Add your platform here
 #endif
 #endif
 
-#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) // XXX: remove
-#include <math.h>
-#endif
+extern ENGINE_API float psHUD_FOV;
 
+namespace xray::render::RENDER_NAMESPACE
+{
 using namespace PAPI;
 using namespace PS;
 
@@ -32,19 +34,7 @@ static void ApplyTexgen(CBackend& cmd_list, const Fmatrix& mVP)
 {
     Fmatrix mTexgen;
 
-#if defined(USE_DX9)
-    float _w = float(Device.dwWidth);
-    float _h = float(Device.dwHeight);
-    float o_w = (.5f / _w);
-    float o_h = (.5f / _h);
-    Fmatrix mTexelAdjust =
-    {
-        0.5f, 0.0f, 0.0f, 0.0f,
-        0.0f, -0.5f, 0.0f, 0.0f,
-        0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f + o_w, 0.5f + o_h, 0.0f, 1.0f
-    };
-#elif defined(USE_DX11)
+#if defined(USE_DX11)
     Fmatrix mTexelAdjust =
     {
         0.5f, 0.0f, 0.0f, 0.0f,
@@ -149,6 +139,8 @@ void CParticleEffect::UpdateParent(const Fmatrix& m, const Fvector& velocity, BO
 
 void CParticleEffect::OnFrame(u32 frame_dt)
 {
+    ZoneScoped;
+
     if (m_Def && m_RT_Flags.is(flRT_Playing))
     {
         m_MemDT += frame_dt;
@@ -284,6 +276,8 @@ void CParticleEffect::OnDeviceDestroy()
 IC void FillSprite_fpu(FVF::LIT*& pv, const Fvector& T, const Fvector& R, const Fvector& pos, const Fvector2& lt,
     const Fvector2& rb, float r1, float r2, u32 clr, float sina, float cosa)
 {
+    ZoneScoped;
+
     Fvector Vr, Vt;
 
     Vr.x = T.x * r1 * sina + R.x * r1 * cosa;
@@ -315,6 +309,8 @@ IC void FillSprite_fpu(FVF::LIT*& pv, const Fvector& T, const Fvector& R, const 
 IC void FillSprite_fpu(FVF::LIT*& pv, const Fvector& pos, const Fvector& dir, const Fvector2& lt, const Fvector2& rb,
     float r1, float r2, u32 clr, float sina, float cosa)
 {
+    ZoneScoped;
+
     const Fvector& T = dir;
 
     Fvector R;
@@ -352,30 +348,32 @@ IC void FillSprite_fpu(FVF::LIT*& pv, const Fvector& pos, const Fvector& dir, co
 //----------------------------------------------------
 Lock m_sprite_section;
 
-#if defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K)
+#if defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K) || defined(XR_ARCHITECTURE_PPC64)
 IC void FillSprite(FVF::LIT*& pv, const Fvector& T, const Fvector& R, const Fvector& pos, const Fvector2& lt,
     const Fvector2& rb, float r1, float r2, u32 clr, float sina, float cosa)
 {
+    ZoneScoped;
+
     m_sprite_section.Enter();
 
-    __m128 Vr, Vt, _T, _R, _pos, _zz, _sa, _ca, a, b, c, d;
+    __m128 Vr, Vt, T_, R_, _pos, _zz, _sa, _ca, a, b, c, d;
 
     _sa = _mm_set1_ps(sina);
     _ca = _mm_set1_ps(cosa);
 
-    _T = _mm_load_ss((float*)&T.x);
-    _T = _mm_loadh_pi(_T, (__m64*)&T.y);
+    T_ = _mm_load_ss((float*)&T.x);
+    T_ = _mm_loadh_pi(T_, (__m64*)&T.y);
 
-    _R = _mm_load_ss((float*)&R.x);
-    _R = _mm_loadh_pi(_R, (__m64*)&R.y);
+    R_ = _mm_load_ss((float*)&R.x);
+    R_ = _mm_loadh_pi(R_, (__m64*)&R.y);
 
     _pos = _mm_load_ss((float*)&pos.x);
     _pos = _mm_loadh_pi(_pos, (__m64*)&pos.y);
 
     _zz = _mm_setzero_ps();
 
-    Vr = _mm_mul_ps(_mm_set1_ps(r1), _mm_add_ps(_mm_mul_ps(_T, _sa), _mm_mul_ps(_R, _ca)));
-    Vt = _mm_mul_ps(_mm_set1_ps(r2), _mm_sub_ps(_mm_mul_ps(_T, _ca), _mm_mul_ps(_R, _sa)));
+    Vr = _mm_mul_ps(_mm_set1_ps(r1), _mm_add_ps(_mm_mul_ps(T_, _sa), _mm_mul_ps(R_, _ca)));
+    Vt = _mm_mul_ps(_mm_set1_ps(r2), _mm_sub_ps(_mm_mul_ps(T_, _ca), _mm_mul_ps(R_, _sa)));
 
     a = _mm_sub_ps(Vt, Vr);
     b = _mm_add_ps(Vt, Vr);
@@ -416,9 +414,7 @@ IC void FillSprite(FVF::LIT*& pv, const Fvector& T, const Fvector& R, const Fvec
 IC void FillSprite(FVF::LIT*& pv, const Fvector& pos, const Fvector& dir, const Fvector2& lt, const Fvector2& rb,
     float r1, float r2, u32 clr, float sina, float cosa)
 {
-#ifdef _GPA_ENABLED
-    TAL_SCOPED_TASK_NAMED("FillSpriteTransform()");
-#endif // _GPA_ENABLED
+    ZoneScoped;
 
     const Fvector& T = dir;
     Fvector R;
@@ -483,9 +479,7 @@ ICF void FillSprite(FVF::LIT*& pv, const Fvector& pos, const Fvector& dir, const
 #error Specify your platform explicitly
 #endif // defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K)
 
-extern ENGINE_API float psHUD_FOV;
-
-#if defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K)
+#if defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K) || defined(XR_ARCHITECTURE_PPC64)
 ICF void magnitude_sse(Fvector& vec, float& res) // XXX: move this to Fvector class
 {
     __m128 tv, tu;
@@ -679,7 +673,7 @@ void CParticleEffect::Render(CBackend& cmd_list, float, bool use_fast_geo)
                 Fmatrix FTold = Device.mFullTransform;
                 if (GetHudMode())
                 {
-                    Device.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT, VIEWPORT_NEAR,
+                    Device.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT, HUD_VIEWPORT_NEAR,
                         g_pGamePersistent->Environment().CurrentEnv.far_plane);
 
                     Device.mFullTransform.mul(Device.mProject, Device.mView);
@@ -727,7 +721,6 @@ IC void FillSprite(FVF::LIT*& pv, const Fvector& pos, const Fvector& dir, const 
     FillSprite_fpu(pv, pos, dir, lt, rb, r1, r2, clr, _sin(angle), _cos(angle));
 }
 
-extern ENGINE_API float psHUD_FOV;
 void CParticleEffect::Render(float, bool)
 {
     u32 dwOffset, dwCount;
@@ -847,7 +840,7 @@ void CParticleEffect::Render(float, bool)
                 Fmatrix FTold = Device.mFullTransform;
                 if (GetHudMode())
                 {
-                    Device.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT, VIEWPORT_NEAR,
+                    Device.mProject.build_projection(deg2rad(psHUD_FOV * Device.fFOV), Device.fASPECT, HUD_VIEWPORT_NEAR,
                         g_pGamePersistent->Environment().CurrentEnv.far_plane);
 
                     Device.mFullTransform.mul(Device.mProject, Device.mView);
@@ -881,3 +874,4 @@ void CParticleEffect::Render(float, bool)
 }
 
 #endif // _EDITOR
+} // namespace xray::render::RENDER_NAMESPACE

@@ -4,6 +4,8 @@
 #include "Layers/xrRender/blenders/uber_deffer.h"
 #include "blender_deffer_aref.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 CBlender_deffer_aref::CBlender_deffer_aref(bool _lmapped) : lmapped(_lmapped)
 {
     description.CLS = B_DEFAULT_AREF;
@@ -102,7 +104,7 @@ void CBlender_deffer_aref::Compile(CBlender_Compile& C)
                          oAREF.value);
                 C.r_Sampler("s_base", C.L_textures[0]);
                 C.r_Sampler("s_lmap", C.L_textures[1]);
-                C.r_Sampler_clf("s_hemi", *C.L_textures[2]);
+                C.r_Sampler_clf("s_hemi", C.L_textures[2].c_str());
                 C.r_Sampler("s_env", r2_T_envs0, false, D3DTADDRESS_CLAMP);
                 C.r_End();
             }
@@ -202,7 +204,7 @@ void CBlender_deffer_aref::Compile(CBlender_Compile& C)
 
                 C.r_dx11Texture("s_base", C.L_textures[0]);
                 C.r_dx11Texture("s_lmap", C.L_textures[1]);
-                C.r_dx11Texture("s_hemi", *C.L_textures[2]);
+                C.r_dx11Texture("s_hemi", C.L_textures[2].c_str());
                 C.r_dx11Texture("s_env", r2_T_envs0);
 
                 C.r_dx11Sampler("smp_base");
@@ -294,3 +296,4 @@ void CBlender_deffer_aref::Compile(CBlender_Compile& C)
     }
 #endif
 }
+} // namespace xray::render::RENDER_NAMESPACE

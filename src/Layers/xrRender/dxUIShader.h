@@ -1,9 +1,9 @@
-#ifndef dxUIShader_included
-#define dxUIShader_included
 #pragma once
 
 #include "Include/xrRender/UIShader.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class dxUIShader : public IUIShader
 {
     friend class dxUIRender;
@@ -12,14 +12,17 @@ class dxUIShader : public IUIShader
     friend class CRender;
 
 public:
-    virtual ~dxUIShader() { ; }
     virtual void Copy(IUIShader& _in);
     virtual void create(LPCSTR sh, LPCSTR tex = nullptr);
     virtual bool inited() { return hShader; }
     virtual void destroy();
 
+    CTexture* GetBaseTexture() const;
+    bool GetBaseTextureResolution(Fvector2& res) override;
+    xrImTextureData GetImGuiTextureId() override;
+
 private:
     ref_shader hShader;
+    shared_str baseTexture{ "s_base" };
 };
-
-#endif //	dxUIShader_included
+} // namespace xray::render::RENDER_NAMESPACE

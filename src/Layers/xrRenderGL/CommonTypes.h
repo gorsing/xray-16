@@ -3,8 +3,12 @@
 // TODO: Get rid of D3D types.
 #if defined(XR_PLATFORM_WINDOWS)
 #include <d3d9types.h>
+#else
+#include "Common/d3d9compat.hpp"
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class glState;
 
 typedef enum D3D_CLEAR_FLAG {
@@ -64,3 +68,4 @@ using HostBufferHandle = void*;
 
 using VertexElement = D3DVERTEXELEMENT9;
 using InputElementDesc = unused_t;
+} // namespace xray::render::RENDER_NAMESPACE

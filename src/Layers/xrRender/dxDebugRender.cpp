@@ -5,6 +5,8 @@
 #include "dxDebugRender.h"
 #include "dxUIShader.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 dxDebugRender DebugRenderImpl;
 dxDebugRender::dxDebugRender()
 {
@@ -98,15 +100,9 @@ void dxDebugRender::CacheSetXformWorld(const Fmatrix& M) { RCache.set_xform_worl
 void dxDebugRender::CacheSetCullMode(CullMode m) { RCache.set_CullMode(CULL_NONE + m); }
 void dxDebugRender::SetAmbient(u32 colour)
 {
-#if defined(USE_DX9)
-    CHK_DX(HW.pDevice->SetRenderState(D3DRS_AMBIENT, colour));
-#elif defined(USE_DX11) || defined(USE_OGL)
     //	TODO: DX11: Check if need this for DX11
     VERIFY(!"Not implemented for DX11");
     UNUSED(colour);
-#else
-#   error No graphics API selected or enabled!
-#endif
 }
 
 void dxDebugRender::SetDebugShader(dbgShaderHandle shdHandle)
@@ -142,13 +138,16 @@ private:
     xr_vector<FVF::L> _line_vertices;
 
 public:
-    RDebugRender()
+    void Register() override
     {
-        // Device.seqRender.Add		(this);
         Device.seqRender.Add(this, REG_PRIORITY_LOW - 100);
     }
 
-    virtual ~RDebugRender() { Device.seqRender.Remove(this); }
+    void Unregister() override
+    {
+        Device.seqRender.Remove(this);
+    }
+
     void OnRender()
     {
         m_line_indices = _line_indices;
@@ -166,4 +165,5 @@ public:
 } rdebug_render_impl;
 dxDebugRender* rdebug_render = &rdebug_render_impl;
 
+} // namespace xray::render::RENDER_NAMESPACE
 #endif //	DEBUG

@@ -1,8 +1,13 @@
 #pragma once
-#include "xrCore/xrstring.h"
+
 #include "xrCommon/xr_string.h"
 #include "xrCommon/xr_map.h"
+
+#include "xrCore/xrstring.h"
+
 #include "xrEngine/xr_input.h" // Don't remove this include
+
+#include "xrScriptEngine/ScriptExporter.hpp"
 
 enum EGameActions : u32
 {
@@ -124,6 +129,13 @@ enum EGameActions : u32
     kCUSTOM14,
     kCUSTOM15,
 
+    kPDA_TAB1,
+    kPDA_TAB2,
+    kPDA_TAB3,
+    kPDA_TAB4,
+    kPDA_TAB5,
+    kPDA_TAB6,
+
     kKICK, // alpet: kick dynamic objects
 
     kEDITOR,
@@ -136,8 +148,15 @@ enum EGameActions : u32
     kUI_MOVE_UP,
     kUI_MOVE_DOWN,
 
+    kUI_MOVE_SECONDARY,
+
+    kUI_CLICK_1,
+    kUI_CLICK_2,
+
     kUI_ACCEPT,
     kUI_BACK,
+    kUI_ACTION_1,
+    kUI_ACTION_2,
 
     kUI_TAB_PREV,
     kUI_TAB_NEXT,
@@ -229,13 +248,13 @@ ENGINE_API bool IsGroupNotConflicted(EKeyGroup g1, EKeyGroup g2);
 ENGINE_API bool IsContextNotConflicted(EKeyContext c1, EKeyContext c2);
 
 ENGINE_API pcstr IdToActionName(EGameActions id);
-ENGINE_API EGameActions ActionNameToId(pcstr name);
-ENGINE_API game_action* ActionNameToPtr(pcstr name);
+ENGINE_API EGameActions ActionNameToId(pcstr name, bool silent = false);
+ENGINE_API game_action* ActionNameToPtr(pcstr name, bool silent = false);
 
 ENGINE_API pcstr DikToKeyname(int dik);
-ENGINE_API int KeynameToDik(pcstr name);
-ENGINE_API keyboard_key* KeynameToPtr(pcstr name);
-ENGINE_API keyboard_key* DikToPtr(int dik, bool safe);
+ENGINE_API int KeynameToDik(pcstr name, bool silent = false);
+ENGINE_API keyboard_key* KeynameToPtr(pcstr name, bool silent = false);
+ENGINE_API keyboard_key* DikToPtr(int dik, bool silent);
 
 ENGINE_API bool IsBinded(EGameActions action_id, int dik, EKeyContext context = EKeyContext::Undefined);
 ENGINE_API int GetActionDik(EGameActions action_id, int idx = -1);
@@ -286,3 +305,8 @@ public:
 };
 
 extern ENGINE_API ConsoleBindCmds g_consoleBindCmds;
+
+struct ENGINE_API key_binding_registrator
+{
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
+};

@@ -1,9 +1,9 @@
-#ifndef QueryHelper_included
-#define QueryHelper_included
 #pragma once
 
+namespace xray::render::RENDER_NAMESPACE
+{
 //	Interface
-#if defined(USE_DX9) || defined(USE_DX11)
+#if defined(USE_DX11)
 IC HRESULT CreateQuery(ID3DQuery** ppQuery);
 IC HRESULT GetData(ID3DQuery* pQuery, void* pData, u32 DataSize);
 IC HRESULT BeginQuery(ID3DQuery* pQuery);
@@ -21,24 +21,7 @@ IC HRESULT ReleaseQuery(GLuint pQuery);
 
 //	Implementation
 
-#if defined(USE_DX9) // USE_DX9
-
-IC HRESULT CreateQuery(ID3DQuery** ppQuery, D3D_QUERY type) { return HW.pDevice->CreateQuery(type, ppQuery); }
-IC HRESULT GetData(ID3DQuery* pQuery, void* pData, u32 DataSize)
-{
-    return pQuery->GetData(pData, DataSize, D3DGETDATA_FLUSH);
-}
-
-IC HRESULT BeginQuery(ID3DQuery* pQuery) { return pQuery->Issue(D3DISSUE_BEGIN); }
-IC HRESULT EndQuery(ID3DQuery* pQuery) { return pQuery->Issue(D3DISSUE_END); }
-
-IC HRESULT ReleaseQuery(ID3DQuery* pQuery)
-{
-    _RELEASE(pQuery);
-    return S_OK;
-}
-
-#elif defined(USE_DX11)
+#if defined(USE_DX11)
 
 IC HRESULT CreateQuery(ID3DQuery** ppQuery, D3D_QUERY type)
 {
@@ -111,5 +94,4 @@ IC HRESULT ReleaseQuery(GLuint query)
 #else
 #   error No graphics API selected or enabled!
 #endif
-
-#endif // QueryHelper_included
+} // namespace xray::render::RENDER_NAMESPACE

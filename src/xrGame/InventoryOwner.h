@@ -178,6 +178,8 @@ public:
         CharacterInfo().m_SpecificCharacter.data()->m_icon_name = iconName;
     }
 
+    void SetMonsterCommunity() const;
+
     //для работы с relation system
     u16 object_id() const;
     CHARACTER_COMMUNITY_INDEX Community() const { return CharacterInfo().Community().index(); };
@@ -216,8 +218,6 @@ public:
     virtual void on_weapon_shot_remove(CWeapon* weapon);
     virtual void on_weapon_hide(CWeapon* weapon);
 
-public:
-    virtual bool use_simplified_visual() const { return (false); };
 private:
     CTradeParameters* m_trade_parameters{};
     CPurchaseList* m_purchase_list{};

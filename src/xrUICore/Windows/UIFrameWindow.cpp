@@ -39,7 +39,6 @@ void CUIFrameWindow::SetWndSize(const Fvector2& sz)
 
 bool CUIFrameWindow::InitTextureEx(pcstr texture, pcstr shader, bool fatal /*= true*/)
 {
-    dbg_tex_name = texture;
     string256 buf;
 
     const bool back_exist = CUITextureMaster::InitTexture(strconcat(sizeof(buf), buf, texture, "_back"), shader, m_shader, m_tex_rect[fmBK]);
@@ -170,8 +169,8 @@ void CUIFrameWindow::DrawElements()
 {
     GEnv.UIRender->SetShader(*m_shader);
 
-    Fvector2 ts;
-    GEnv.UIRender->GetActiveTextureResolution(ts);
+    Fvector2 ts{};
+    m_shader->GetBaseTextureResolution(ts);
 
     Frect rect;
     GetAbsoluteRect(rect);

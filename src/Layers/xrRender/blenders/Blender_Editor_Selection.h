@@ -1,5 +1,7 @@
 #pragma once
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class CBlender_Editor_Selection : public IBlender
 {
     string64 oT_Factor;
@@ -13,9 +15,10 @@ public:
 
     LPCSTR getComment() override;
     BOOL canBeLMAPped() override;
-    
+
     void Save(IWriter& fs) override;
     void Load(IReader& fs, u16 version) override;
-    
+
     void Compile(CBlender_Compile& C) override;
 };
+} // namespace xray::render::RENDER_NAMESPACE

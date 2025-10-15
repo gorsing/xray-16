@@ -4,6 +4,8 @@
 #include "Layers/xrRender/HWCaps.h"
 #include "glHW.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 namespace
 {
 u32 GetGpuNum()
@@ -26,9 +28,7 @@ void CHWCaps::Update()
     geometry.dwRegisters = cnt;
     geometry.dwInstructions = 256;
     geometry.dwClipPlanes = _min(6, 15);
-    geometry.bVTF =
-        (HW.OpenGLVersion >= std::make_pair(3, 0) || GLEW_ARB_texture_float)
-        && !strstr(Core.Params, "-novtf");
+    geometry.bVTF = (GLAD_GL_VERSION_3_0 || GLAD_GL_ARB_texture_float) && !strstr(Core.Params, "-novtf");
 
     // ***************** PIXEL processing
     raster_major = 4;
@@ -72,3 +72,4 @@ void CHWCaps::Update()
 
     useCombinedSamplers = true;
 }
+} // namespace xray::render::RENDER_NAMESPACE

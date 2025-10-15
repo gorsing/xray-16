@@ -1,7 +1,7 @@
-#ifndef dx11ConstantBuffer_impl_included
-#define dx11ConstantBuffer_impl_included
 #pragma once
 
+namespace xray::render::RENDER_NAMESPACE
+{
 IC Fvector4* dx11ConstantBuffer::Access(u16 offset)
 {
     //	TODO: DX11: Implement code which will check if set actually changes code.
@@ -47,7 +47,7 @@ IC void dx11ConstantBuffer::set(R_constant* C, R_constant_load& L, const Fmatrix
         break;
     default:
 #ifdef DEBUG
-        xrDebug::Fatal(DEBUG_INFO, "Invalid constant run-time-type for '%s'", *C->name);
+        xrDebug::Fatal(DEBUG_INFO, "Invalid constant run-time-type for '%s'", C->name.c_str());
 #else
         NODEFAULT;
 #endif
@@ -147,7 +147,7 @@ IC void dx11ConstantBuffer::seta(R_constant* C, R_constant_load& L, u32 e, const
         break;
     default:
 #ifdef DEBUG
-        xrDebug::Fatal(DEBUG_INFO, "Invalid constant run-time-type for '%s'", *C->name);
+        xrDebug::Fatal(DEBUG_INFO, "Invalid constant run-time-type for '%s'", C->name.c_str());
 #else
         NODEFAULT;
 #endif
@@ -187,5 +187,4 @@ IC void* dx11ConstantBuffer::AccessDirect(R_constant_load& L, size_t DataSize)
     else
         return 0;
 }
-
-#endif //	dx11ConstantBuffer_impl_included
+} // namespace xray::render::RENDER_NAMESPACE

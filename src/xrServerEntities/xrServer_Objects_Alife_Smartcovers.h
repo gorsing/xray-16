@@ -41,11 +41,10 @@ public:
     BOOL m_is_combat_cover;
     BOOL m_can_fire;
     bool m_need_to_reparse_loopholes;
-#ifndef AI_COMPILER
-    luabind::object m_available_loopholes;
-#endif // #ifndef AI_COMPILER
 
-#ifdef XRSE_FACTORY_EXPORTS
+    luabind::object m_available_loopholes;
+
+#ifndef MASTER_GOLD
 private:
     typedef xr_vector<visual_data> visuals_collection;
 
@@ -57,7 +56,7 @@ public:
 
 private:
     mutable visuals_collection m_visuals;
-#endif // #ifdef XRSE_FACTORY_EXPORTS
+#endif // !MASTER_GOLD
 
 public:
     CSE_SmartCover(LPCSTR caSection);
@@ -69,16 +68,15 @@ public:
     virtual bool can_switch_offline() const /* noexcept */;
     virtual bool interactive() const /* noexcept */;
     LPCSTR description() const;
-#ifndef AI_COMPILER
-    void set_available_loopholes(luabind::object table);
-#endif // #ifndef AI_COMPILER
 
-#ifdef XRSE_FACTORY_EXPORTS
+    void set_available_loopholes(luabind::object table);
+
+#ifndef MASTER_GOLD
     virtual void on_render(CDUInterface* du, IServerEntityLEOwner* owner, bool bSelected,
         const Fmatrix& parent, int priority, bool strictB2F);
     virtual visual_data* visual_collection() const { return &*m_visuals.begin(); }
     virtual u32 visual_collection_size() const { return m_visuals.size(); }
-#endif // #ifdef XRSE_FACTORY_EXPORTS
+#endif // !MASTER_GOLD
 
 private:
     void check_enterable_loopholes(shared_str const& description);
@@ -92,6 +90,9 @@ public:
     virtual void STATE_Read(NET_Packet& P, u16 size);
     virtual void STATE_Write(NET_Packet& P);
     SERVER_ENTITY_EDITOR_METHODS
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CSE_ALifeDynamicObject);
 };
 #pragma warning(pop)
 #endif

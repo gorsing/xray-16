@@ -2,6 +2,8 @@
 
 #include "Layers/xrRender/ColorMapManager.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class light;
 
 //#define DU_SPHERE_NUMVERTEX 92
@@ -11,7 +13,7 @@ class light;
 //	no less than 2
 #define VOLUMETRIC_SLICES 100
 
-class CRenderTarget : public IRender_Target
+class CRenderTarget
 {
     u32 dwWidth[R__NUM_CONTEXTS];
     u32 dwHeight[R__NUM_CONTEXTS];
@@ -85,6 +87,21 @@ public:
     ref_texture t_noise[TEX_jitter_count];
     ref_texture t_noise_mipped;
 
+    // Anomaly
+    //Rendertargets
+    ref_rt rt_Generic_temp;
+
+    ref_rt rt_dof;
+
+    ref_rt rt_blur_h_2;
+    ref_rt rt_blur_2;
+
+    ref_rt rt_blur_h_4;
+    ref_rt rt_blur_4;
+
+    ref_rt rt_blur_h_8;
+    ref_rt rt_blur_8;
+
 private:
     // OCCq
     ref_shader s_occq;
@@ -105,6 +122,13 @@ private:
     ref_shader s_accum_reflected_msaa[8];
     ref_shader s_accum_volume;
     ref_shader s_accum_volume_msaa[8];
+
+    //Anomaly
+    ref_shader s_blur;
+    ref_shader s_dof;
+    ref_shader s_gasmask_drops;
+    ref_shader s_gasmask_dudv;
+    ref_shader s_nightvision;
 
     //	generate min/max
     ref_shader s_create_minmax_sm;
@@ -203,7 +227,7 @@ private:
 
 public:
     CRenderTarget();
-    ~CRenderTarget() override;
+    ~CRenderTarget();
 
     void build_textures();
 
@@ -265,6 +289,13 @@ public:
     void phase_accumulator(CBackend& cmd_list);
     void phase_vol_accumulator(CBackend& cmd_list);
 
+    //Anomaly renderphases
+    void phase_blur();
+    void phase_dof();
+    void phase_gasmask_drops();
+    void phase_gasmask_dudv();
+    void phase_nightvision();
+
     //	Generates min/max sm
     void create_minmax_SM(CBackend& cmd_list);
 
@@ -287,7 +318,7 @@ public:
     void accum_direct_f(CBackend& cmd_list, u32 sub_phase);
     void accum_direct_lum(CBackend& cmd_list);
     void accum_direct_blend(CBackend& cmd_list);
-    void accum_direct_volumetric(CBackend& cmd_list, u32 sub_phase, const u32 Offset, const Fmatrix& mShadow);
+    void accum_direct_volumetric(CBackend& cmd_list, u32 sub_phase, const u32 Offset, const Fmatrix& mShadow, float zMin, float zMax);
     void accum_point(CBackend& cmd_list, light* L);
     void accum_spot(CBackend& cmd_list, light* L);
     void accum_reflected(CBackend& cmd_list, light* L);
@@ -303,22 +334,22 @@ public:
     void phase_flip();
 #endif
 
-    u32 get_width(CBackend& cmd_list) override { return dwWidth[cmd_list.context_id]; }
-    u32 get_height(CBackend& cmd_list) override { return dwHeight[cmd_list.context_id]; }
+    u32 get_width(CBackend& cmd_list) { return dwWidth[cmd_list.context_id]; }
+    u32 get_height(CBackend& cmd_list) { return dwHeight[cmd_list.context_id]; }
 
-    void set_blur(float f) override { param_blur = f; }
-    void set_gray(float f) override { param_gray = f; }
-    void set_duality_h(float f) override { param_duality_h = _abs(f); }
-    void set_duality_v(float f) override { param_duality_v = _abs(f); }
-    void set_noise(float f) override { param_noise = f; }
-    void set_noise_scale(float f) override { param_noise_scale = f; }
-    void set_noise_fps(float f) override { param_noise_fps = _abs(f) + EPS_S; }
-    void set_color_base(u32 f) override { param_color_base = f; }
-    void set_color_gray(u32 f) override { param_color_gray = f; }
-    void set_color_add(const Fvector& f) override { param_color_add = f; }
-    void set_cm_imfluence(float f) override { param_color_map_influence = f; }
-    void set_cm_interpolate(float f) override { param_color_map_interpolate = f; }
-    void set_cm_textures(const shared_str& tex0, const shared_str& tex1) override
+    void set_blur(float f) { param_blur = f; }
+    void set_gray(float f) { param_gray = f; }
+    void set_duality_h(float f) { param_duality_h = _abs(f); }
+    void set_duality_v(float f) { param_duality_v = _abs(f); }
+    void set_noise(float f) { param_noise = f; }
+    void set_noise_scale(float f) { param_noise_scale = f; }
+    void set_noise_fps(float f) { param_noise_fps = _abs(f) + EPS_S; }
+    void set_color_base(u32 f) { param_color_base = f; }
+    void set_color_gray(u32 f) { param_color_gray = f; }
+    void set_color_add(const Fvector& f) { param_color_add = f; }
+    void set_cm_imfluence(float f) { param_color_map_influence = f; }
+    void set_cm_interpolate(float f) { param_color_map_interpolate = f; }
+    void set_cm_textures(const shared_str& tex0, const shared_str& tex1)
     {
         color_map_manager.SetTextures(tex0, tex1);
     }
@@ -327,8 +358,6 @@ public:
     //	Don't clear when render for the first time
     void reset_light_marker(CBackend& cmd_list, bool bResetStencil = false);
     void increment_light_marker(CBackend& cmd_list);
-
-    void DoAsyncScreenshot();
 
 #ifdef DEBUG
     void dbg_addline(const Fvector& P0, const Fvector& P1, u32 c)
@@ -379,3 +408,4 @@ public:
     void dbg_addplane(Fplane& /*P0*/, u32 /*c*/) {}
 #endif
 };
+} // namespace xray::render::RENDER_NAMESPACE

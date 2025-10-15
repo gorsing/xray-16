@@ -24,7 +24,7 @@
 #include "ui/UIMainIngameWnd.h"
 #include "CarWeapon.h"
 #include "game_object_space.h"
-#include "xrEngine/GameMtlLib.h"
+#include "xrMaterialSystem/GameMtlLib.h"
 
 #include "CharacterPhysicsSupport.h"
 #include "car_memory.h"
@@ -446,7 +446,7 @@ void CCar::VisualUpdate(float fov)
     Fvector C, V;
     Center(C);
     V.set(lin_vel);
-    
+
     m_car_sound->Update();
     if (Owner())
     {
@@ -462,7 +462,7 @@ void CCar::VisualUpdate(float fov)
         // 			OwnerActor()->Cameras().ApplyDevice();
         // 		}
         //
-        /*		if(CurrentGameUI())//
+        /*		if(CurrentGameUI())
                 {
                     CurrentGameUI()->UIMainIngameWnd->CarPanel().Show(true);
                     CurrentGameUI()->UIMainIngameWnd->CarPanel().SetCarHealth(GetfHealth());
@@ -833,18 +833,10 @@ void CCar::CreateSkeleton(CSE_Abstract* po)
         pK->CalculateBones(TRUE);
     }
     phys_shell_verify_object_model(*this);
-    /* Alundaio: p_build_shell
-    #pragma todo(" replace below by P_build_Shell or call inherited")
-    m_pPhysicsShell = P_create_Shell();
-    m_pPhysicsShell->build_FromKinematics(pK, &bone_map);
-    m_pPhysicsShell->set_PhysicsRefObject(this);
-    m_pPhysicsShell->mXFORM.set(XFORM());
-    m_pPhysicsShell->Activate(true);
-    m_pPhysicsShell->SetAirResistance(0.f, 0.f);
-    m_pPhysicsShell->SetPrefereExactIntegration();
-    */
+
     m_pPhysicsShell = P_build_Shell(this, false, &bone_map);
-    //-Alundaio
+    if (!bone_map.empty())
+        m_pPhysicsShell->SetPrefereExactIntegration();
 
     ApplySpawnIniToPhysicShell(&po->spawn_ini(), m_pPhysicsShell, false);
     ApplySpawnIniToPhysicShell(pK->LL_UserData(), m_pPhysicsShell, false);
@@ -947,17 +939,17 @@ void CCar::Init()
         for (auto I = data.Data.cbegin(); I != data.Data.cend(); ++I)
         {
             const CInifile::Item& item = *I;
-            u16 index = pKinematics->LL_BoneID(*item.first);
-            R_ASSERT3(index != BI_NONE, "Wrong bone name", *item.first);
+            u16 index = pKinematics->LL_BoneID(item.first.c_str());
+            R_ASSERT3(index != BI_NONE, "Wrong bone name", item.first.c_str());
             xr_map<u16, SWheel>::iterator i = m_wheels_map.find(index);
 
             if (i != m_wheels_map.end())
-                i->second.CDamagableHealthItem::Init(float(atof(*item.second)), 2);
+                i->second.CDamagableHealthItem::Init(float(atof(item.second.c_str())), 2);
             else
             {
                 xr_map<u16, SDoor>::iterator i = m_doors.find(index);
-                R_ASSERT3(i != m_doors.end(), "only wheel and doors bones allowed for damage defs", *item.first);
-                i->second.CDamagableHealthItem::Init(float(atof(*item.second)), 1);
+                R_ASSERT3(i != m_doors.end(), "only wheel and doors bones allowed for damage defs", item.first.c_str());
+                i->second.CDamagableHealthItem::Init(float(atof(item.second.c_str())), 1);
             }
         }
     }
@@ -1084,39 +1076,20 @@ void CCar::UpdatePower()
         i->UpdatePower();
 }
 
-void CCar::SteerRight()
+void CCar::Steer(float angle)
 {
     b_wheels_limited = true; // no need to limit wheels when stiring
     m_pPhysicsShell->Enable();
-    xr_vector<SWheelSteer>::iterator i, e;
-    i = m_steering_wheels.begin();
-    e = m_steering_wheels.end();
-    for (; i != e; ++i)
-        i->SteerRight();
-    e_state_steer = right;
-}
-void CCar::SteerLeft()
-{
-    b_wheels_limited = true; // no need to limit wheels when stiring
-    m_pPhysicsShell->Enable();
-    xr_vector<SWheelSteer>::iterator i, e;
-    i = m_steering_wheels.begin();
-    e = m_steering_wheels.end();
-    for (; i != e; ++i)
-        i->SteerLeft();
-    e_state_steer = left;
-}
 
-void CCar::SteerIdle()
-{
-    b_wheels_limited = false;
-    m_pPhysicsShell->Enable();
-    xr_vector<SWheelSteer>::iterator i, e;
-    i = m_steering_wheels.begin();
-    e = m_steering_wheels.end();
-    for (; i != e; ++i)
-        i->SteerIdle();
-    e_state_steer = idle;
+    for (auto& steering : m_steering_wheels)
+        steering.Steer(angle);
+
+    if (fis_zero(angle))
+        e_state_steer = idle;
+    else if (angle > 0)
+        e_state_steer = right;
+    else
+        e_state_steer = left;
 }
 
 void CCar::LimitWheels()
@@ -1163,10 +1136,10 @@ void CCar::PressRight()
     if (lsp)
     {
         if (!fwp)
-            SteerIdle();
+            Steer(0.0f);
     }
     else
-        SteerRight();
+        Steer(1.0f);
     rsp = true;
 }
 void CCar::PressLeft()
@@ -1174,10 +1147,10 @@ void CCar::PressLeft()
     if (rsp)
     {
         if (!fwp)
-            SteerIdle();
+            Steer(0.0f);
     }
     else
-        SteerLeft();
+        Steer(-1.0f);
     lsp = true;
 }
 void CCar::PressForward()
@@ -1235,17 +1208,17 @@ void CCar::DriveForward()
 void CCar::ReleaseRight()
 {
     if (lsp)
-        SteerLeft();
+        Steer(-1.0f);
     else
-        SteerIdle();
+        Steer(0.0f);
     rsp = false;
 }
 void CCar::ReleaseLeft()
 {
     if (rsp)
-        SteerRight();
+        Steer(1.0f);
     else
-        SteerIdle();
+        Steer(0.0f);
     lsp = false;
 }
 void CCar::ReleaseForward()
@@ -1988,7 +1961,7 @@ void CCar::SetfFuel(float fuel)
     m_fuel = fuel;
 }
 
-// получить и задать размер топливного бака 
+// получить и задать размер топливного бака
 float CCar::GetfFuelTank()
 {
     return m_fuel_tank;

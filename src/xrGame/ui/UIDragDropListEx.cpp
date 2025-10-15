@@ -8,6 +8,8 @@
 #include "Inventory.h"
 //-Alundaio
 
+extern int g_inv_highlight_equipped;
+
 CUIDragItem* CUIDragDropListEx::m_drag_item = NULL;
 
 void CUICell::Clear()
@@ -90,7 +92,7 @@ void CUIDragDropListEx::InitDragDropList(Fvector2 pos, Fvector2 size)
         Fvector2().set(m_vScrollBar->GetWndPos().x - m_vScrollBar->GetWidth(), m_vScrollBar->GetWndPos().y));
 }
 
-void CUIDragDropListEx::SetHighlighter(CUIStatic* highlighter, Fvector2 spacing)
+void CUIDragDropListEx::SetHighlighter(CUIStatic* highlighter, Fvector2 spacing, bool convertPosToOurs /*= true*/)
 {
     if (m_highlighter)
     {
@@ -113,7 +115,7 @@ void CUIDragDropListEx::SetHighlighter(CUIStatic* highlighter, Fvector2 spacing)
             AttachChild(m_highlighter);
             // Convert absolute position to relative
             // Without this, UI Frustum will cull our highlighter
-            if (!m_highlighter->WndPosIsProbablyRelative())
+            if (convertPosToOurs)
             {
                 Fvector2 ourAbsPos;
                 GetAbsolutePos(ourAbsPos);
@@ -130,7 +132,7 @@ void CUIDragDropListEx::Highlight(bool highlight)
         m_highlighter->Show(highlight);
 }
 
-void CUIDragDropListEx::SetBlocker(CUIStatic* blocker, Fvector2 spacing)
+void CUIDragDropListEx::SetBlocker(CUIStatic* blocker, Fvector2 spacing, bool convertPosToOurs /*= true*/)
 {
     if (m_blocker)
     {
@@ -152,7 +154,7 @@ void CUIDragDropListEx::SetBlocker(CUIStatic* blocker, Fvector2 spacing)
             AttachChild(m_blocker);
             // Convert absolute position to relative
             // Without this, UI Frustum will cull our blocker
-            if (!m_blocker->WndPosIsProbablyRelative())
+            if (convertPosToOurs)
             {
                 Fvector2 ourAbsPos;
                 GetAbsolutePos(ourAbsPos);
@@ -163,7 +165,7 @@ void CUIDragDropListEx::SetBlocker(CUIStatic* blocker, Fvector2 spacing)
     }
 }
 
-void CUIDragDropListEx::SetConditionIndicator(CUIProgressBar* indicator)
+void CUIDragDropListEx::SetConditionIndicator(CUIProgressBar* indicator, bool convertPosToOurs /*= true*/)
 {
     if (m_condition_indicator && m_condition_indicator->GetParent() == this)
     {
@@ -178,7 +180,7 @@ void CUIDragDropListEx::SetConditionIndicator(CUIProgressBar* indicator)
         AttachChild(m_condition_indicator);
         // Convert absolute position to relative
         // Without this, UI Frustum will cull our indicator
-        if (!m_condition_indicator->WndPosIsProbablyRelative())
+        if (convertPosToOurs)
         {
             Fvector2 ourAbsPos;
             GetAbsolutePos(ourAbsPos);
@@ -650,11 +652,14 @@ bool CUICellContainer::AddSimilar(CUICellItem* itm)
         return false;
 
     //Alundaio: Don't stack equipped items
-    extern int g_inv_highlight_equipped;
-    if (g_inv_highlight_equipped)
+    PIItem iitem = (PIItem)itm->m_pData;
+    if (iitem && iitem->m_pInventory)
     {
-        const PIItem iitem = static_cast<PIItem>(itm->m_pData);
-        if (iitem && iitem->m_pInventory && iitem->m_pInventory->ItemFromSlot(iitem->BaseSlot()) == iitem)
+        if (g_inv_highlight_equipped)
+            if (iitem->m_pInventory->ItemFromSlot(iitem->BaseSlot()) == iitem)
+                return false;
+
+        if (pSettings->line_exist(iitem->m_section_id, "dont_stack") && pSettings->r_bool(iitem->m_section_id, "dont_stack"))
             return false;
     }
     //-Alundaio
@@ -673,19 +678,20 @@ CUICellItem* CUICellContainer::FindSimilar(CUICellItem* itm)
 {
     for (auto& it : m_ChildWndList)
     {
-        // XXX: Xottab_DUTY: find out why different casts used for different configurations
-        // and maybe use only one cast
 #ifdef DEBUG
         auto i = smart_cast<CUICellItem*>(it);
 #else
         auto i = (CUICellItem*)it;
 #endif
         //Alundaio: Don't stack equipped items
-        extern int g_inv_highlight_equipped;
-        if (g_inv_highlight_equipped)
+        PIItem iitem = (PIItem)i->m_pData;
+        if (iitem && iitem->m_pInventory)
         {
-            auto iitem = static_cast<PIItem>(i->m_pData);
-            if (iitem && iitem->m_pInventory && iitem->m_pInventory->ItemFromSlot(iitem->BaseSlot()) == iitem)
+            if (g_inv_highlight_equipped)
+                if (iitem->m_pInventory->ItemFromSlot(iitem->BaseSlot()) == iitem)
+                    continue;
+
+            if (pSettings->line_exist(iitem->m_section_id, "dont_stack") && pSettings->r_bool(iitem->m_section_id, "dont_stack"))
                 continue;
         }
         //-Alundaio
@@ -1078,18 +1084,8 @@ void CUICellContainer::Draw()
                     select_mode = 1;
                 else if (ui_cell.m_item->m_select_armament)
                     select_mode = 3;
-                else
-                {
-                    //Alundaio: Highlight equipped items
-                    extern int g_inv_highlight_equipped;
-                    if (g_inv_highlight_equipped)
-                    {
-                        PIItem iitem = static_cast<PIItem>(ui_cell.m_item->m_pData);
-                        if (iitem && iitem->m_pInventory && iitem->m_pInventory->ItemFromSlot(iitem->BaseSlot()) == iitem)
-                            select_mode = 2;
-                    }
-                    //-Alundaio
-                }
+                else if (ui_cell.m_item->m_select_equipped && g_inv_highlight_equipped)
+                    select_mode = 2;
             }
 
             Fvector2 tp;

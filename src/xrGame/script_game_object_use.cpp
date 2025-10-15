@@ -12,10 +12,10 @@
 #include "enemy_manager.h"
 #include "movement_manager.h"
 #include "patrol_path_manager.h"
-#include "PHCommander.h"
-#include "PHScriptCall.h"
-#include "PHSimpleCalls.h"
 #include "xrPhysics/IPHWorld.h"
+#include "xrPhysics/PHCommander.h"
+#include "xrPhysics/PHScriptCall.h"
+#include "xrPhysics/PHSimpleCalls.h"
 #include "doors_manager.h"
 
 void CScriptGameObject::SetTipText(LPCSTR tip_text) { object().set_tip_text(tip_text); }
@@ -59,9 +59,12 @@ int CScriptGameObject::clsid() const { return (object().clsid()); }
 LPCSTR CScriptGameObject::Name() const { return (*object().cName()); }
 shared_str CScriptGameObject::cName() const { return (object().cName()); }
 LPCSTR CScriptGameObject::Section() const { return (*object().cNameSect()); }
-void CScriptGameObject::Kill(CScriptGameObject* who, bool bypass_actor_check /*AVO: added for actor before death callback*/)
+void CScriptGameObject::Kill(CScriptGameObject* who, bool bypass_actor_check)
 {
     CEntity* l_tpEntity = smart_cast<CEntity*>(&object());
+    if (psActorFlags.test(AF_GODMODE) && !!l_tpEntity->cast_actor())
+        return;
+
     if (!l_tpEntity)
     {
         GEnv.ScriptEngine->script_log(
@@ -206,6 +209,5 @@ void CScriptGameObject::set_const_force(const Fvector& dir, float value, u32 tim
     CPHConstForceAction* a = xr_new<CPHConstForceAction>(shell, force);
     CPHExpireOnStepCondition* cn = xr_new<CPHExpireOnStepCondition>();
     cn->set_time_interval(time_interval);
-    // ph_world->AddCall(cn,a);
-    Level().ph_commander_physics_worldstep().add_call_threadsafety(cn, a);
+    physics_world()->AddCall(cn, a);
 }

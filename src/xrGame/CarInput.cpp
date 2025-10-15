@@ -17,17 +17,17 @@
 #include "Level.h"
 #include "CarWeapon.h"
 
-void CCar::OnAxisMove(float x, float y, float scale, bool invert)
+void CCar::OnAxisMove(float x, float y, float scaleX, float scaleY, bool invertX, bool invertY)
 {
     CCameraBase* C = active_camera;
     if (!fis_zero(x))
     {
-        const float d = x * scale;
+        const float d = (invertX ? -1.f : 1.f) * x * scaleX;
         C->Move((d < 0) ? kLEFT : kRIGHT, _abs(d));
     }
     if (!fis_zero(y))
     {
-        const float d = (invert ? -1.f : 1.f) * y * scale * 3.f / 4.f;
+        const float d = (invertY ? -1.f : 1.f) * y * scaleY * 3.f / 4.f;
         C->Move((d > 0) ? kUP : kDOWN, _abs(d));
     }
 }
@@ -38,7 +38,7 @@ void CCar::OnMouseMove(int dx, int dy)
         return;
 
     const float scale = (active_camera->f_fov / g_fov) * psMouseSens * psMouseSensScale / 50.f;
-    OnAxisMove(float(dx), float(dy), scale, psMouseInvert.test(1));
+    OnAxisMove(float(dx), float(dy), scale, scale, false, psMouseInvert.test(1));
 }
 
 bool CCar::bfAssignMovement(CScriptEntityAction* tpEntityAction)
@@ -227,7 +227,7 @@ void CCar::OnKeyboardHold(int cmd)
     //	clamp(m_vCamDeltaHP.y, active_camera->lim_pitch.x,	active_camera->lim_pitch.y);
 }
 
-void CCar::OnControllerPress(int cmd, float x, float y)
+void CCar::OnControllerPress(int cmd, const ControllerAxisState& state)
 {
     if (Remote())
         return;
@@ -236,25 +236,26 @@ void CCar::OnControllerPress(int cmd, float x, float y)
     {
     case kLOOK_AROUND:
     {
-        const float scale = (active_camera->f_fov / g_fov) * psControllerStickSens * psControllerStickSensScale / 50.f;
-        OnAxisMove(x, y, scale, psControllerInvertY.test(1));
+        const float scale  = active_camera->f_fov / g_fov * psControllerStickSensScale;
+        const float scaleX = scale * psControllerStickSensX;
+        const float scaleY = scale * psControllerStickSensY;
+        OnAxisMove(state.x, state.y, scaleX, scaleY, psControllerFlags.test(ControllerInvertX), psControllerFlags.test(ControllerInvertY));
         break;
     }
 
     case kMOVE_AROUND:
     {
-        if (!fis_zero(x))
+        if (std::abs(state.x) > 0.35f)
         {
-            if (x > 35.f)
-                OnKeyboardPress(kR_STRAFE);
-            else if (x < -35.f)
-                OnKeyboardPress(kL_STRAFE);
+            Steer(state.x);
+            if (OwnerActor())
+                OwnerActor()->steer_Vehicle(state.x);
         }
-        if (!fis_zero(y))
+        if (!fis_zero(state.y))
         {
-            if (y > 35.f)
+            if (state.y > 0.35f)
                 OnKeyboardPress(kBACK);
-            else if (y < -35.f)
+            else if (state.y < -0.35f)
                 OnKeyboardPress(kFWD);
         }
         break;
@@ -263,10 +264,10 @@ void CCar::OnControllerPress(int cmd, float x, float y)
     default:
         OnKeyboardPress(cmd);
         break;
-    };
+    }
 }
 
-void CCar::OnControllerRelease(int cmd, float x, float y)
+void CCar::OnControllerRelease(int cmd, const ControllerAxisState& state)
 {
     if (Remote())
         return;
@@ -277,19 +278,20 @@ void CCar::OnControllerRelease(int cmd, float x, float y)
         break;
 
     case kMOVE_AROUND:
-        OnKeyboardRelease(kFWD);
-        OnKeyboardRelease(kBACK);
-        OnKeyboardRelease(kL_STRAFE);
-        OnKeyboardRelease(kR_STRAFE);
+        Steer(0.0f);
+        if (fwp)
+            OnKeyboardRelease(kFWD);
+        if (bkp)
+            OnKeyboardRelease(kBACK);
         break;
 
     default:
         OnKeyboardPress(cmd);
         break;
-    };
+    }
 }
 
-void CCar::OnControllerHold(int cmd, float x, float y)
+void CCar::OnControllerHold(int cmd, const ControllerAxisState& state)
 {
     if (Remote())
         return;
@@ -298,52 +300,42 @@ void CCar::OnControllerHold(int cmd, float x, float y)
     {
     case kLOOK_AROUND:
     {
-        const float scale = (active_camera->f_fov / g_fov) * psControllerStickSens * psControllerStickSensScale / 50.f;
-        OnAxisMove(x, y, scale, psControllerInvertY.test(1));
+        const float scale  = active_camera->f_fov / g_fov * psControllerStickSensScale;
+        const float scaleX = scale * psControllerStickSensX;
+        const float scaleY = scale * psControllerStickSensY;
+        OnAxisMove(state.x, state.y, scaleX, scaleY, psControllerFlags.test(ControllerInvertX), psControllerFlags.test(ControllerInvertY));
         break;
     }
 
     case kMOVE_AROUND:
     {
-        if (!fis_zero(x))
+        const float angle = std::abs(state.x) > 0.35f ? state.x : 0.0f;
+
+        Steer(angle);
+        if (OwnerActor())
+            OwnerActor()->steer_Vehicle(angle);
+
+        if (std::abs(state.y) > 0.35f)
         {
-            if (x > 35.f && !rsp) // right
+            if (state.y < 0.f) // forward
             {
-                OnKeyboardRelease(kL_STRAFE);
-                OnKeyboardPress(kR_STRAFE);
-            }
-            else if (x < -35.f && !lsp) // left
-            {
-                OnKeyboardRelease(kR_STRAFE);
-                OnKeyboardPress(kL_STRAFE);
-            }
-            else
-            {
-                if (lsp)
-                    OnKeyboardRelease(kL_STRAFE);
-                if (rsp)
-                    OnKeyboardRelease(kR_STRAFE);
-            }
-        }
-        if (!fis_zero(y))
-        {
-            if (y > 35.f && !bkp) // backward
-            {
-                OnKeyboardRelease(kFWD);
-                OnKeyboardPress(kBACK);
-            }
-            else if (y < -35.f && !fwp) // forward
-            {
-                OnKeyboardRelease(kBACK);
+                if (bkp)
+                    OnKeyboardRelease(kBACK);
                 OnKeyboardPress(kFWD);
             }
-            else
+            else // state.y > 0.f backward
             {
                 if (fwp)
                     OnKeyboardRelease(kFWD);
-                if (bkp)
-                    OnKeyboardRelease(kBACK);
+                OnKeyboardPress(kBACK);
             }
+        }
+        else
+        {
+            if (fwp)
+                OnKeyboardRelease(kFWD);
+            if (bkp)
+                OnKeyboardRelease(kBACK);
         }
         break;
     }
@@ -357,7 +349,7 @@ void CCar::OnControllerHold(int cmd, float x, float y)
 void CCar::OnControllerAttitudeChange(Fvector change)
 {
     const float scale = (active_camera->f_fov / g_fov) * psControllerSensorSens / 50.f;
-    OnAxisMove(change.x, change.y, scale, psControllerInvertY.test(1));
+    OnAxisMove(change.x, change.y, scale, scale, psControllerFlags.test(ControllerInvertX), psControllerFlags.test(ControllerInvertY));
 }
 
 void CCar::Action(u16 id, u32 flags)

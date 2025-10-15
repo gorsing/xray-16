@@ -82,7 +82,7 @@ u32 frustum_aabb_remap[8][6] =
 EFC_Visible CFrustum::testSphere(Fvector& c, float r, u32& test_mask) const
 {
     u32 bit = 1;
-    for (int i = 0; i < p_count; i++, bit <<= 1)
+    for (u32 i = 0; i < p_count; i++, bit <<= 1)
     {
         if (test_mask & bit)
         {
@@ -101,10 +101,60 @@ EFC_Visible CFrustum::testSphere(Fvector& c, float r, u32& test_mask) const
 
 bool CFrustum::testSphere_dirty(const Fvector& c, float r) const
 {
-	VERIFY(p_count <= FRUSTUM_MAXPLANES); // '<=' is not a typo, this check is correct
-    if (p_count == 0)
-        return true;
-    return planes[p_count - 1].classify(c) <= r;
+    switch (p_count)
+    {
+    case 12:
+        if (planes[11].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 11:
+        if (planes[10].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 10:
+        if (planes[9].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 9:
+        if (planes[8].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 8:
+        if (planes[7].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 7:
+        if (planes[6].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 6:
+        if (planes[5].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 5:
+        if (planes[4].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 4:
+        if (planes[3].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 3:
+        if (planes[2].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 2:
+        if (planes[1].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 1:
+        if (planes[0].classify(c) > r)
+            return FALSE;
+        [[fallthrough]];
+    case 0: break;
+    default: NODEFAULT;
+    }
+    return TRUE;
 }
 
 EFC_Visible CFrustum::testAABB(const float* mM, u32& test_mask) const
@@ -112,7 +162,7 @@ EFC_Visible CFrustum::testAABB(const float* mM, u32& test_mask) const
     // go for trivial rejection or acceptance using "faster overlap test"
     u32 bit = 1;
 
-    for (int i = 0; i < p_count; i++, bit <<= 1)
+    for (u32 i = 0; i < p_count; i++, bit <<= 1)
     {
         if (test_mask & bit)
         {
@@ -132,7 +182,7 @@ EFC_Visible CFrustum::testAABB(const float* mM, u32& test_mask) const
 EFC_Visible CFrustum::testSAABB(Fvector& c, float r, const float* mM, u32& test_mask) const
 {
     u32 bit = 1;
-    for (int i = 0; i < p_count; i++, bit <<= 1)
+    for (u32 i = 0; i < p_count; i++, bit <<= 1)
     {
         if (test_mask & bit)
         {
@@ -163,7 +213,7 @@ EFC_Visible CFrustum::testSAABB(Fvector& c, float r, const float* mM, u32& test_
 bool CFrustum::testPolyInside_dirty(Fvector* p, size_t count) const
 {
     Fvector* e = p + count;
-    for (int i = 0; i < p_count; i++)
+    for (u32 i = 0; i < p_count; i++)
     {
         const fplane& P = planes[i];
         for (Fvector* I = p; I != e; I++)
@@ -334,7 +384,7 @@ sPoly* CFrustum::ClipPoly(sPoly& S, sPoly& D) const
 {
     sPoly* src = &D;
     sPoly* dest = &S;
-    for (int i = 0; i < p_count; i++)
+    for (u32 i = 0; i < p_count; i++)
     {
         // cache plane and swap lists
         const fplane& P = planes[i];
@@ -480,7 +530,7 @@ void CFrustum::CreateFromMatrix(Fmatrix& M, u32 mask)
         p_count++;
     }
 
-    for (int i = 0; i < p_count; i++)
+    for (u32 i = 0; i < p_count; i++)
     {
         float denom = 1.0f / planes[i].n.magnitude(); // Get magnitude of Vector
         planes[i].n.x *= denom;

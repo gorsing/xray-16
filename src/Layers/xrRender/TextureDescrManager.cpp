@@ -5,6 +5,8 @@
 
 #include "xrCore/Threading/ParallelForEach.hpp"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 // eye-params
 float r__dtex_range = 50;
 class cl_dt_scaler : public R_constant_setup
@@ -28,6 +30,8 @@ void fix_texture_thm_name(pstr fn)
 
 void CTextureDescrMngr::LoadLTX(pcstr initial, bool listTHM)
 {
+    ZoneScoped;
+
     string_path fname;
     FS.update_path(fname, initial, "textures.ltx");
 
@@ -52,6 +56,7 @@ void CTextureDescrMngr::LoadLTX(pcstr initial, bool listTHM)
 
         const auto processAssociation = [&](const CInifile::Item& item)
         {
+            ZoneScopedN("Process association");
             if (listTHM)
                 Msg("\t\t%s = %s", item.first.c_str(), item.second.c_str());
 
@@ -68,7 +73,7 @@ void CTextureDescrMngr::LoadLTX(pcstr initial, bool listTHM)
             string_path T;
             float s;
 
-            const int res = sscanf(*item.second, "%[^,],%f", T, &s);
+            const int res = sscanf(item.second.c_str(), "%[^,],%f", T, &s);
             R_ASSERT4(res == 2, "Bad texture association", item.first.c_str(), fname);
             desc.m_assoc->detail_name = T;
             if (dts)
@@ -124,6 +129,8 @@ void CTextureDescrMngr::LoadLTX(pcstr initial, bool listTHM)
 
 void CTextureDescrMngr::LoadTHM(LPCSTR initial, bool listTHM)
 {
+    ZoneScoped;
+
     FS_FileSet flist;
     FS.file_list(flist, initial, FS_ListFiles, "*.thm");
 
@@ -141,6 +148,7 @@ void CTextureDescrMngr::LoadTHM(LPCSTR initial, bool listTHM)
     Lock lock;
     const auto processFile = [&](const FS_File& it)
     {
+        ZoneScopedN("Process file");
         // Alundaio: Print list of *.thm to find bad .thms!
         if (listTHM)
             Log("\t", it.name.c_str());
@@ -189,7 +197,7 @@ void CTextureDescrMngr::LoadTHM(LPCSTR initial, bool listTHM)
                 xr_delete(desc.m_spec);
 
             desc.m_spec = xr_new<texture_spec>();
-            desc.m_spec->m_material = tp.material + tp.material_weight;
+            desc.m_spec->m_material = float(tp.material) + tp.material_weight;
             desc.m_spec->m_use_steep_parallax = false;
 
             if (tp.bump_mode == STextureParams::tbmUse)
@@ -216,6 +224,7 @@ void CTextureDescrMngr::LoadTHM(LPCSTR initial, bool listTHM)
 
 void CTextureDescrMngr::Load()
 {
+    ZoneScoped;
 #ifndef MASTER_GOLD
     CTimer timer;
     timer.Start();
@@ -246,6 +255,8 @@ void CTextureDescrMngr::UnLoad()
 
 CTextureDescrMngr::~CTextureDescrMngr()
 {
+    ZoneScoped;
+
     for (auto& it : m_detail_scalers)
         xr_delete(it.second);
 
@@ -321,3 +332,4 @@ BOOL CTextureDescrMngr::GetDetailTexture(const shared_str& tex_name, LPCSTR& res
     }
     return FALSE;
 }
+} // namespace xray::render::RENDER_NAMESPACE

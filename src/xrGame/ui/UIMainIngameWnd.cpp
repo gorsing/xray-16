@@ -71,6 +71,8 @@ CUIMainIngameWnd::~CUIMainIngameWnd()
 
 void CUIMainIngameWnd::Init()
 {
+    ZoneScoped;
+
     CUIXml uiXml;
     uiXml.Load(CONFIG_PATH, UI_PATH, UI_PATH_DEFAULT, MAININGAME_XML);
 
@@ -103,11 +105,8 @@ void CUIMainIngameWnd::Init()
     m_iPickUpItemIconY = UIPickUpItemIcon->GetWndRect().top;
     //---------------------------------------------------------
 
-    //индикаторы
-    UIZoneMap->Init();
-
     // Подсказки, которые возникают при наведении прицела на объект
-    UIStaticQuickHelp = UIHelper::CreateTextWnd(uiXml, "quick_info", this);
+    UIStaticQuickHelp = UIHelper::CreateStatic(uiXml, "quick_info", this);
 
     uiXml.SetLocalRoot(uiXml.GetRoot());
 
@@ -173,9 +172,8 @@ void CUIMainIngameWnd::Init()
         UIArtefactIcon->Show(false);
     }
 
-    shared_str warningStrings[7] = {"jammed", "radiation", "wounds", "starvation", "fatigue",
-        "invincible"
-        "artefact"};
+    const static shared_str warningStrings[7] = {"jammed", "radiation", "wounds", "starvation", "fatigue",
+        "invincible", "artefact"};
 
     // Загружаем пороговые значения для индикаторов
     EWarningIcons j = ewiWeaponJammed;
@@ -207,11 +205,20 @@ void CUIMainIngameWnd::Init()
 
     UIMotionIcon = xr_new<CUIMotionIcon>();
     UIMotionIcon->SetAutoDelete(true);
-    const bool independent = UIMotionIcon->Init(UIZoneMap->MapFrame().GetWndRect());
-    if (!independent)
+    const bool attachedToMinimap = UIMotionIcon->Init();
+
+    //индикаторы
+    UIZoneMap->Init(attachedToMinimap);
+
+    if (attachedToMinimap)
+    {
         UIZoneMap->MapFrame().AttachChild(UIMotionIcon);
+        UIMotionIcon->AttachToMinimap(UIZoneMap->MapFrame().GetWndRect());
+    }
     else
+    {
         AttachChild(UIMotionIcon);
+    }
 
     UIStaticDiskIO = UIHelper::CreateStatic(uiXml, "disk_io", this);
 
@@ -243,8 +250,7 @@ void CUIMainIngameWnd::Init()
         m_quick_slots_icons.push_back(slot);
 
         xr_sprintf(path, "quick_slot%d_text", i);
-        CUITextWnd* text = UIHelper::CreateTextWnd(uiXml, path, this);
-        m_quick_slots_texts.push_back(text);
+        m_quick_slots_texts.emplace_back(UIHelper::CreateStatic(uiXml, path, this));
 
         i++;
     }
@@ -255,6 +261,8 @@ void CUIMainIngameWnd::Init()
 float UIStaticDiskIO_start_time = 0.0f;
 void CUIMainIngameWnd::Draw()
 {
+    ZoneScoped;
+
     CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
 
     // show IO icon
@@ -308,6 +316,8 @@ void CUIMainIngameWnd::SetMPChatLog(CUIWindow* pChat, CUIWindow* pLog)
 
 void CUIMainIngameWnd::Update()
 {
+    ZoneScoped;
+
     CUIWindow::Update();
     CActor* pActor = smart_cast<CActor*>(Level().CurrentViewEntity());
 
@@ -411,7 +421,7 @@ void CUIMainIngameWnd::RenderQuickInfos()
     }
 }
 
-void CUIMainIngameWnd::ReceiveNews(GAME_NEWS_DATA* news)
+void CUIMainIngameWnd::ReceiveNews(const GAME_NEWS_DATA* news)
 {
     VERIFY(news->texture_name.size());
 
@@ -495,6 +505,8 @@ void CUIMainIngameWnd::SetFlashIconState_(EFlashingIcons type, bool enable)
 
 void CUIMainIngameWnd::InitFlashingIcons(CUIXml* node)
 {
+    ZoneScoped;
+
     const char* const flashingIconNodeName = "flashing_icon";
     int staticsCount = node->GetNodesNum("", 0, flashingIconNodeName);
 
@@ -598,6 +610,7 @@ void CUIMainIngameWnd::UpdatePickUpItem()
 
 void CUIMainIngameWnd::OnConnected()
 {
+    ZoneScoped;
     UIZoneMap->SetupCurrentMap();
     if (m_ui_hud_states)
     {
@@ -608,6 +621,7 @@ void CUIMainIngameWnd::OnConnected()
 void CUIMainIngameWnd::OnSectorChanged(IRender_Sector::sector_id_t sector) { UIZoneMap->OnSectorChanged(sector); }
 void CUIMainIngameWnd::reset_ui()
 {
+    ZoneScoped;
     m_pPickUpItem = NULL;
     UIMotionIcon->ResetVisibility();
     if (m_ui_hud_states)

@@ -46,11 +46,6 @@ CArtefact::CArtefact()
 {
     shedule.t_min = 20;
     shedule.t_max = 50;
-    m_sParticlesName = NULL;
-    m_pTrailLight = NULL;
-    m_activationObj = NULL;
-    m_detectorObj = NULL;
-    m_additional_weight = 0.0f;
 }
 
 CArtefact::~CArtefact() {}
@@ -95,7 +90,7 @@ bool CArtefact::net_Spawn(CSE_Abstract* DC)
     StartLights();
     m_CarringBoneID = u16(-1);
     IKinematicsAnimated* K = smart_cast<IKinematicsAnimated*>(Visual());
-    if (K)
+    if (K && K->ID_Cycle_Safe("idle"))
         K->PlayCycle("idle");
 
     o_fastmode = FALSE; // start initially with fast-mode enabled
@@ -345,15 +340,9 @@ void CArtefact::UpdateXForm()
 
         // Get access to entity and its visual
         CEntityAlive* E = smart_cast<CEntityAlive*>(H_Parent());
-
         if (!E)
             return;
 
-        const CInventoryOwner* parent = smart_cast<const CInventoryOwner*>(E);
-        if (parent && parent->use_simplified_visual())
-            return;
-
-        VERIFY(E);
         IKinematics* V = smart_cast<IKinematics*>(E->Visual());
         VERIFY(V);
         if (CAttachableItem::enabled())

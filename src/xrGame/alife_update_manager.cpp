@@ -18,7 +18,6 @@
 #include "xrServer.h"
 #include "Level.h"
 #include "xrAICore/Navigation/graph_engine.h"
-#include "xrEngine/x_ray.h"
 #include "restriction_space.h"
 #include "xrEngine/profiler.h"
 #include "mt_config.h"
@@ -137,6 +136,10 @@ bool CALifeUpdateManager::change_level(NET_Packet& net_packet)
     if (m_changing_level)
         return (false);
 
+    luabind::functor<void> funct;
+    if (GEnv.ScriptEngine->functor("_G.CALifeUpdateManager__on_before_change_level", funct))
+        funct(&net_packet);
+
     //	prepare_objects_for_save		();
     // we couldn't use prepare_objects_for_save since we need
     // get updates from client
@@ -187,7 +190,7 @@ bool CALifeUpdateManager::change_level(NET_Packet& net_packet)
 
     string256 autoave_name;
     strconcat(sizeof(autoave_name), autoave_name, Core.UserName, " - ", "autosave");
-    LPCSTR temp0 = strchr(**m_server_command_line, '/');
+    LPCSTR temp0 = strchr(m_server_command_line->c_str(), '/');
     VERIFY(temp0);
     string256 temp;
     *m_server_command_line = strconcat(sizeof(temp), temp, autoave_name, temp0);
@@ -215,8 +218,7 @@ bool CALifeUpdateManager::change_level(NET_Packet& net_packet)
 #include "xrEngine/IGame_Persistent.h"
 void CALifeUpdateManager::new_game(LPCSTR save_name)
 {
-    g_pGamePersistent->SetLoadStageTitle("st_creating_new_game");
-    g_pGamePersistent->LoadTitle();
+    g_pGamePersistent->LoadTitle("st_creating_new_game");
     Msg("* Creating new game...");
 
     unload();
@@ -245,8 +247,7 @@ void CALifeUpdateManager::new_game(LPCSTR save_name)
 
 void CALifeUpdateManager::load(LPCSTR game_name, bool no_assert, bool new_only)
 {
-    g_pGamePersistent->SetLoadStageTitle("st_loading_alife_simulator");
-    g_pGamePersistent->LoadTitle();
+    g_pGamePersistent->LoadTitle("st_loading_alife_simulator");
 
 #ifdef DEBUG
     Memory.mem_compact();
@@ -268,8 +269,7 @@ void CALifeUpdateManager::load(LPCSTR game_name, bool no_assert, bool new_only)
     Msg("* Loading alife simulator is successfully completed (%7.3f Mb)",
         float(Memory.mem_usage() - memory_usage) / 1048576.0);
 #endif
-    g_pGamePersistent->SetLoadStageTitle("st_server_connecting");
-    g_pGamePersistent->LoadTitle(true, g_pGameLevel->name());
+    g_pGamePersistent->LoadTitle("st_server_connecting", true, g_pGameLevel->name());
 }
 
 void CALifeUpdateManager::reload(LPCSTR section)
@@ -298,7 +298,7 @@ bool CALifeUpdateManager::load_game(LPCSTR game_name, bool no_assert)
     }
 
     string512 S, S1;
-    xr_strcpy(S, **m_server_command_line);
+    xr_strcpy(S, m_server_command_line->c_str());
     pstr temp = strchr(S, '/');
     R_ASSERT2(temp, "Invalid server options!");
     strconcat(sizeof(S1), S1, game_name, temp);
@@ -388,10 +388,10 @@ void CALifeUpdateManager::teleport_object(
     {
         Msg("[LSS] teleporting object [%s][%s][%d] from level [%s], position [%f][%f][%f] to level [%s], position "
             "[%f][%f][%f]",
-            object->name_replace(), *object->s_name, object->ID,
-            *(ai().game_graph().header().level(ai().game_graph().vertex(object->m_tGraphID)->level_id()).name()),
+            object->name_replace(), object->s_name.c_str(), object->ID,
+            ai().game_graph().header().level(ai().game_graph().vertex(object->m_tGraphID)->level_id()).name().c_str(),
             VPUSH(ai().game_graph().vertex(object->m_tGraphID)->level_point()),
-            *(ai().game_graph().header().level(ai().game_graph().vertex(game_vertex_id)->level_id()).name()),
+            ai().game_graph().header().level(ai().game_graph().vertex(game_vertex_id)->level_id()).name().c_str(),
             VPUSH(ai().game_graph().vertex(game_vertex_id)->level_point()));
     }
 #endif

@@ -10,7 +10,6 @@
 class CGameSpy_Full;
 class CGameSpy_GP;
 class CGameSpy_ATLAS;
-class CGameSpy_Patching;
 
 namespace gamespy_gp
 {
@@ -32,11 +31,13 @@ struct profile
     char const* unique_nick() const { return m_unique_nick.c_str(); };
     bool online() const { return m_online; };
     GPProfile profile_id() const { return m_profile_id; };
-    // copy constructor is valid
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 }; // struct profile
 
-// typedef fastdelegate::FastDelegate<void (profile const *, shared_str const &)>	login_operation_cb;
-typedef mixed_delegate<void(profile const*, char const*), mdut_login_operation_cb_tag> login_operation_cb;
+//using login_operation_cb = fastdelegate::FastDelegate<void (profile const*, shared_str const&)>;
+using login_operation_cb = mixed_delegate<void(profile const*, char const*), mdut_login_operation_cb_tag>;
 
 class login_manager : private Noncopyable
 {
@@ -89,7 +90,6 @@ private:
 
     CGameSpy_GP* m_gamespy_gp;
     CGameSpy_ATLAS* m_gamespy_atlas;
-    CGameSpy_Patching* m_gamespy_patching;
     profile* m_current_profile;
 
     shared_str m_last_email;
@@ -109,11 +109,14 @@ private:
 
     static void __cdecl wslogin_cb(GHTTPResult httpResult, WSLoginResponse* response, void* userData);
     static void __cdecl setunick_cb(GPConnection* connection, void* arg, void* param);
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 }; // class login_manager
 } // namespace gamespy_gp
 
-typedef gamespy_gp::profile gamespy_gp_profile;
-typedef gamespy_gp::login_operation_cb gamespy_gp_login_operation_cb;
-typedef gamespy_gp::login_manager gamespy_gp_login_manager;
+using gamespy_gp_profile            = gamespy_gp::profile;
+using gamespy_gp_login_operation_cb = gamespy_gp::login_operation_cb;
+using gamespy_gp_login_manager      = gamespy_gp::login_manager;
 
 #endif //#ifndef LOGIN_MANAGER

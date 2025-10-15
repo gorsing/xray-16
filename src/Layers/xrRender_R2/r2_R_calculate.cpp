@@ -3,6 +3,8 @@
 #include "xrEngine/CustomHUD.h"
 #include "xrCore/Threading/TaskManager.hpp"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 float g_fSCREEN;
 
 extern float r_dtex_range;
@@ -27,6 +29,8 @@ void render_main::init()
 
 void render_main::calculate()
 {
+    ZoneScoped;
+
     auto& dsgraph_main = RImplementation.get_imm_context();
 
     dsgraph_main.o.phase = CRender::PHASE_NORMAL;
@@ -61,10 +65,11 @@ void render_main::render()
 
 void CRender::Calculate()
 {
+    ZoneScopedN("r2_calculate");
+
     // Transfer to global space to avoid deep pointer access
-    IRender_Target* T = getTarget();
     float fov_factor = _sqr(90.f / Device.fFOV);
-    g_fSCREEN = float(T->get_width(RCache) * T->get_height(RCache)) * fov_factor * (EPS_S + ps_r__LOD);
+    g_fSCREEN = float(Target->get_width(RCache) * Target->get_height(RCache)) * fov_factor * (EPS_S + ps_r__LOD);
     r_ssaDISCARD = _sqr(ps_r__ssaDISCARD) / g_fSCREEN;
     r_ssaDONTSORT = _sqr(ps_r__ssaDONTSORT / 3) / g_fSCREEN;
     r_ssaLOD_A = _sqr(ps_r2_ssaLOD_A / 3) / g_fSCREEN;
@@ -102,7 +107,7 @@ void CRender::Calculate()
 
     // Check if we touch some light even trough portal
     static xr_vector<ISpatial*> spatial_lights;
-    g_SpatialSpace->q_sphere(spatial_lights, 0, STYPE_LIGHTSOURCE, Device.vCameraPosition, EPS_L);
+    g_pGamePersistent->SpatialSpace.q_sphere(spatial_lights, 0, STYPE_LIGHTSOURCE, Device.vCameraPosition, EPS_L);
     for (auto spatial : spatial_lights)
     {
         const auto& entity_pos = spatial->spatial_sector_point();
@@ -117,10 +122,6 @@ void CRender::Calculate()
         VERIFY(L);
         Lights.add_light(L);
     }
-
-
-    // Frustum
-    ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
 
     TaskScheduler->Wait(*ProcessHOMTask);
 
@@ -151,3 +152,4 @@ void CRender::Calculate()
     else
         r_sun.run();
 }
+} // namespace xray::render::RENDER_NAMESPACE

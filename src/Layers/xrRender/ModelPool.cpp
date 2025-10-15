@@ -2,6 +2,8 @@
 
 #include "ModelPool.h"
 
+#include "xrMaterialSystem/GameMtlLib.h"
+
 #ifndef _EDITOR
 #include "xrEngine/IGame_Persistent.h"
 #include "xrCore/FMesh.hpp"
@@ -26,6 +28,10 @@
 #include "IGame_Persistent.h"
 #endif
 
+extern bool ENGINE_API g_bRendering;
+
+namespace xray::render::RENDER_NAMESPACE
+{
 dxRender_Visual* CModelPool::Instance_Create(u32 type)
 {
     dxRender_Visual* V = nullptr;
@@ -76,7 +82,6 @@ dxRender_Visual* CModelPool::Instance_Duplicate(dxRender_Visual* V)
 
 dxRender_Visual* CModelPool::Instance_Load(const char* N, BOOL allow_register)
 {
-    dxRender_Visual* V;
     string_path fn;
     string_path name;
 
@@ -114,10 +119,38 @@ dxRender_Visual* CModelPool::Instance_Load(const char* N, BOOL allow_register)
     IReader* data = FS.r_open(fn);
     ogf_header H;
     data->r_chunk_safe(OGF_HEADER, &H, sizeof(H));
-    V = Instance_Create(H.type);
+    dxRender_Visual* V = Instance_Create(H.type);
     V->Load(N, data, 0);
     FS.r_close(data);
-    g_pGamePersistent->RegisterModel(V);
+
+    // Register material
+    switch (H.type)
+    {
+    case MT_SKELETON_ANIM:
+    case MT_SKELETON_RIGID:
+    {
+        const u16 def_idx = GMLib.GetMaterialIdx("default_object");
+        R_ASSERT2(GMLib.GetMaterialByIdx(def_idx)->Flags.is(SGameMtl::flDynamic), "'default_object' - must be dynamic");
+        auto* K = static_cast<CKinematics*>(V);
+        VERIFY(K);
+        const u16 cnt = K->LL_BoneCount();
+        for (u16 k = 0; k < cnt; k++)
+        {
+            CBoneData& bd = K->LL_GetData(k);
+            if (bd.game_mtl_name.c_str())
+            {
+                bd.game_mtl_idx = GMLib.GetMaterialIdx(bd.game_mtl_name.c_str());
+                R_ASSERT2(GMLib.GetMaterialByIdx(bd.game_mtl_idx)->Flags.is(SGameMtl::flDynamic),
+                    "Required dynamic game material");
+            }
+            else
+            {
+                bd.game_mtl_idx = def_idx;
+            }
+        }
+    }
+    break;
+    } // switch (V->getType())
 
     // Registration
     if (allow_register)
@@ -199,7 +232,7 @@ dxRender_Visual* CModelPool::Instance_Find(LPCSTR N)
     xr_vector<ModelDef>::iterator I;
     for (I = Models.begin(); I != Models.end(); ++I)
     {
-        if (I->name[0] && (0 == xr_strcmp(*I->name, N)))
+        if (I->name[0] && 0 == xr_strcmp(I->name.c_str(), N))
         {
             Model = I->model;
             break;
@@ -253,7 +286,7 @@ dxRender_Visual* CModelPool::Create(const char* name, IReader* data)
         }
         // 3. If found - return (cloned) reference
         dxRender_Visual* Model = Instance_Duplicate(Base);
-        Registry.insert(std::make_pair(Model, low_name));
+        Registry.emplace(Model, low_name);
         return Model;
     }
 }
@@ -282,7 +315,6 @@ dxRender_Visual* CModelPool::CreateChild(LPCSTR name, IReader* data)
     return Model;
 }
 
-extern bool ENGINE_API g_bRendering;
 void CModelPool::DeleteInternal(dxRender_Visual*& V, BOOL bDiscard)
 {
     VERIFY(!g_bRendering);
@@ -300,7 +332,7 @@ void CModelPool::DeleteInternal(dxRender_Visual*& V, BOOL bDiscard)
         if (it != Registry.end())
         {
             // Registry entry found - move it to pool
-            Pool.insert(std::make_pair(it->second, V));
+            Pool.emplace(it->second, V);
         }
         else
         {
@@ -351,7 +383,7 @@ void CModelPool::Discard(dxRender_Visual*& V, BOOL b_complete)
         {
             if (I->name == name)
             {
-                if (b_complete || strchr(*name, '#'))
+                if (b_complete || strchr(name.c_str(), '#'))
                 {
                     VERIFY(I->refs > 0);
                     I->refs--;
@@ -487,7 +519,7 @@ IC bool _IsBoxVisible(dxRender_Visual* visual, const Fmatrix& transform)
 {
     Fbox bb;
     bb.xform(visual->vis.box, transform);
-    return GEnv.Render->occ_visible(bb);
+    return RImplementation.occ_visible(bb);
 }
 IC bool _IsValidShader(dxRender_Visual* visual, u32 priority, bool strictB2F)
 {
@@ -611,3 +643,4 @@ void CModelPool::RenderSingle(dxRender_Visual* m_pVisual, const Fmatrix& mTransf
 }
 void CModelPool::OnDeviceDestroy() { Destroy(); }
 #endif
+} // namespace xray::render::RENDER_NAMESPACE

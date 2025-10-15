@@ -10,6 +10,8 @@
 #include "PSLibrary.h"
 #include "ParticleEffect.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 using namespace PS;
 
 //------------------------------------------------------------------------------
@@ -183,12 +185,7 @@ void CParticleGroup::SItem::Clear()
     VisualVec visuals;
     GetVisuals(visuals);
     for (auto& visual : visuals)
-    {
-        // GEnv.Render->model_Delete(*it);
-        IRenderVisual* pVisual = smart_cast<IRenderVisual*>(visual);
-        GEnv.Render->model_Delete(pVisual);
-        visual = nullptr;
-    }
+        RImplementation.model_Delete((IRenderVisual*&)visual, false);
 
     //	Igor: zero all pointers! Previous code didn't zero _source_ pointers,
     //	just temporary ones.
@@ -281,20 +278,11 @@ void CParticleGroup::SItem::Stop(BOOL def_stop)
     // and delete if !deffered
     if (!def_stop)
     {
-        for (auto& p : _children_related)
-        {
-            // GEnv.Render->model_Delete(*it);
-            IRenderVisual* pVisual = smart_cast<IRenderVisual*>(p);
-            GEnv.Render->model_Delete(pVisual);
-            p = nullptr;
-        }
-        for (auto& p : _children_free)
-        {
-            // GEnv.Render->model_Delete(*it);
-            IRenderVisual* pVisual = smart_cast<IRenderVisual*>(p);
-            GEnv.Render->model_Delete(pVisual);
-            p = nullptr;
-        }
+        for (auto& child : _children_related)
+            RImplementation.model_Delete((IRenderVisual*&)child, false);
+
+        for (auto& child : _children_free)
+            RImplementation.model_Delete((IRenderVisual*&)child, false);
 
         _children_related.clear();
         _children_free.clear();
@@ -330,10 +318,10 @@ void OnGroupParticleBirth(void* owner, u32 param, PAPI::Particle& m, u32 idx)
     const CPGDef::SEffect* eff = PGD->m_Effects[param];
 
     if (eff->m_Flags.is(CPGDef::SEffect::flOnBirthChild))
-        PG->items[param].StartFreeChild(PE, *eff->m_OnBirthChildName, m);
+        PG->items[param].StartFreeChild(PE, eff->m_OnBirthChildName.c_str(), m);
 
     if (eff->m_Flags.is(CPGDef::SEffect::flOnPlayChild))
-        PG->items[param].StartRelatedChild(PE, *eff->m_OnPlayChildName, m);
+        PG->items[param].StartRelatedChild(PE, eff->m_OnPlayChildName.c_str(), m);
 }
 void OnGroupParticleDead(void* owner, u32 param, PAPI::Particle& m, u32 idx)
 {
@@ -353,7 +341,7 @@ void OnGroupParticleDead(void* owner, u32 param, PAPI::Particle& m, u32 idx)
         PG->items[param].StopRelatedChild(idx);
 
     if (eff->m_Flags.is(CPGDef::SEffect::flOnDeadChild))
-        PG->items[param].StartFreeChild(PE, *eff->m_OnDeadChildName, m);
+        PG->items[param].StartFreeChild(PE, eff->m_OnDeadChildName.c_str(), m);
 }
 //------------------------------------------------------------------------------
 void CParticleGroup::SItem::OnFrame(u32 u_dt, const CPGDef::SEffect& def, Fbox& box, bool& bPlaying)
@@ -418,26 +406,23 @@ void CParticleGroup::SItem::OnFrame(u32 u_dt, const CPGDef::SEffect& def, Fbox& 
     if (!_children_free.empty())
     {
         u32 rem_cnt = 0;
-        for (auto& p : _children_free)
+        for (auto& child : _children_free)
         {
-            CParticleEffect* E = static_cast<CParticleEffect*>(p);
-            if (E)
+            CParticleEffect* E = static_cast<CParticleEffect*>(child);
+            if (!E)
+                continue;
+
+            E->OnFrame(u_dt);
+            if (E->IsPlaying())
             {
-                E->OnFrame(u_dt);
-                if (E->IsPlaying())
-                {
-                    bPlaying = true;
-                    if (E->vis.box.is_valid())
-                        box.merge(E->vis.box);
-                }
-                else
-                {
-                    rem_cnt++;
-                    // GEnv.Render->model_Delete(*it);
-                    IRenderVisual* pVisual = smart_cast<IRenderVisual*>(p);
-                    GEnv.Render->model_Delete(pVisual);
-                    p = nullptr;
-                }
+                bPlaying = true;
+                if (E->vis.box.is_valid())
+                    box.merge(E->vis.box);
+            }
+            else
+            {
+                rem_cnt++;
+                RImplementation.model_Delete((IRenderVisual*&)child, false);
             }
         }
         // remove if stopped
@@ -570,7 +555,7 @@ BOOL CParticleGroup::Compile(CPGDef* def)
         items.resize(m_Def->m_Effects.size());
         for (CPGDef::EffectVec::const_iterator e_it = m_Def->m_Effects.begin(); e_it != m_Def->m_Effects.end(); ++e_it)
         {
-            CParticleEffect* eff = (CParticleEffect*)RImplementation.model_CreatePE(*(*e_it)->m_EffectName);
+            CParticleEffect* eff = (CParticleEffect*)RImplementation.model_CreatePE((*e_it)->m_EffectName.c_str());
             eff->SetBirthDeadCB(OnGroupParticleBirth, OnGroupParticleDead, this, u32(e_it - m_Def->m_Effects.begin()));
             items[e_it - def->m_Effects.begin()].Set(eff);
         }
@@ -641,3 +626,4 @@ BOOL CParticleGroup::GetHudMode()
     }
     return false;
 }
+} // namespace xray::render::RENDER_NAMESPACE

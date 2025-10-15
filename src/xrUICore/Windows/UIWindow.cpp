@@ -1,11 +1,11 @@
 #include "pch.hpp"
 
 #include "UIWindow.h"
-#include "Cursor/UICursor.h"
 
-CUIWindow::CUIWindow(pcstr window_name)
-    : m_windowName(window_name), m_pParentWnd(NULL), m_pMouseCapturer(NULL), m_pKeyboardCapturer(NULL), m_pMessageTarget(NULL),
-      m_dwFocusReceiveTime(0), m_bAutoDelete(false), m_bCursorOverWindow(false), m_bCustomDraw(false)
+#include "Cursor/UICursor.h"
+#include "xrEngine/editor_helper.h"
+
+CUIWindow::CUIWindow(pcstr window_name) : m_windowName(window_name)
 {
     Show(true);
     Enable(true);
@@ -107,7 +107,7 @@ void CUIWindow::DetachAll()
     }
 }
 
-void CUIWindow::GetAbsoluteRect(Frect& r)
+void CUIWindow::GetAbsoluteRect(Frect& r) const
 {
     auto parent = GetParent();
     if (parent == nullptr)
@@ -309,7 +309,7 @@ bool CUIWindow::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 }
 
 //реакция на геймпад
-bool CUIWindow::OnControllerAction(int axis, float x, float y, EUIMessages controller_action)
+bool CUIWindow::OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action)
 {
     bool result;
 
@@ -318,7 +318,7 @@ bool CUIWindow::OnControllerAction(int axis, float x, float y, EUIMessages contr
     // XXX: introduce m_pControllerCapturer?
     if (NULL != m_pKeyboardCapturer)
     {
-        result = m_pKeyboardCapturer->OnControllerAction(axis, x, y, controller_action);
+        result = m_pKeyboardCapturer->OnControllerAction(axis, state, controller_action);
 
         if (result)
             return true;
@@ -330,7 +330,7 @@ bool CUIWindow::OnControllerAction(int axis, float x, float y, EUIMessages contr
     {
         if ((*it)->IsEnabled())
         {
-            result = (*it)->OnControllerAction(axis, x, y, controller_action);
+            result = (*it)->OnControllerAction(axis, state, controller_action);
 
             if (result)
                 return true;
@@ -375,11 +375,14 @@ void CUIWindow::SetKeyboardCapture(CUIWindow* pChildWindow, bool capture_status)
 
     if (capture_status)
     {
-        //оповестить дочернее окно о потере фокуса клавиатуры
-        if (NULL != m_pKeyboardCapturer)
-            m_pKeyboardCapturer->SendMessage(this, WINDOW_KEYBOARD_CAPTURE_LOST);
+        if (m_pKeyboardCapturer != pChildWindow)
+        {
+            //оповестить дочернее окно о потере фокуса клавиатуры
+            if (m_pKeyboardCapturer)
+                m_pKeyboardCapturer->SendMessage(this, WINDOW_KEYBOARD_CAPTURE_LOST);
 
-        m_pKeyboardCapturer = pChildWindow;
+            m_pKeyboardCapturer = pChildWindow;
+        }
     }
     else
         m_pKeyboardCapturer = NULL;
@@ -424,7 +427,12 @@ CUIWindow* CUIWindow::GetChildMouseHandler()
 }
 
 //для перевода окна и потомков в исходное состояние
-void CUIWindow::Reset() { m_pMouseCapturer = NULL; }
+void CUIWindow::Reset()
+{
+    m_pMouseCapturer    = nullptr;
+    m_pKeyboardCapturer = nullptr;
+}
+
 void CUIWindow::ResetAll()
 {
     for (auto it = m_ChildWndList.begin(); m_ChildWndList.end() != it; ++it)
@@ -530,32 +538,49 @@ bool CUIWindow::FillDebugTree(const CUIDebugState& debugState)
         flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen | ImGuiTreeNodeFlags_Bullet;
 
     const bool open = ImGui::TreeNodeEx(this, flags, "%s (%s)", WindowName().c_str(), GetDebugType());
+
+    const bool examined = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
+    if (examined)
+        debugState.examined = this;
     if (ImGui::IsItemClicked())
         debugState.select(this);
 
-    const bool hovered = ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled);
-    if (debugState.drawWndRects && (IsShown() || hovered))
+    if (debugState.settings.drawWndRects && (IsShown() || examined))
     {
+        const auto& focus = UI().Focus();
+        auto& colors = debugState.settings.colors;
+
         Frect rect;
         GetAbsoluteRect(rect);
         UI().ClientToScreenScaled(rect.lt, rect.lt.x, rect.lt.y);
         UI().ClientToScreenScaled(rect.rb, rect.rb.x, rect.rb.y);
 
-        // XXX: make colours user configurable
-        u32 color = color_rgba(255, 0, 0, 255);
-        if (hovered)
-            color = color_rgba(255, 255, 0, 255);
-        else if (debugState.coloredRects)
+        Fcolor color;
+        const bool hovered = CursorOverWindow();
+
+        if (examined)
+            color = colors.examined;
+        else if (focus.GetFocused() == this)
+            color = colors.focused;
+        else if (debugState.settings.coloredRects)
         {
+            const u32 alpha = hovered ? 255 : 200;
             // This is pseudo RNG, so when we are seeding it with 'this' pointer
             // we can expect predictable and stable values (no *blinking* at all)
             CRandom rnd;
             rnd.seed((s32)(intptr_t)this);
-            color = color_rgba(rnd.randI(255), rnd.randI(255), rnd.randI(255), 255);
+            color = color_rgba(rnd.randI(255), rnd.randI(255), rnd.randI(255), alpha);
         }
+        else if (focus.IsValuable(this))
+            color = hovered ? colors.focusableValuableHovered : colors.focusableValuable;
+        else if (focus.IsNonValuable(this))
+            color = hovered ? colors.focusableNonValuableHovered : colors.focusableNonValuable;
+        else
+            color = hovered ? colors.normalHovered : colors.normal;
 
-        const auto draw_list = hovered ? ImGui::GetForegroundDrawList() : ImGui::GetBackgroundDrawList();
-        draw_list->AddRect((const ImVec2&)rect.lt, (const ImVec2&)rect.rb, color);
+        const auto mainVP = ImGui::GetMainViewport();
+        const auto draw_list = examined ? ImGui::GetForegroundDrawList(mainVP) : ImGui::GetBackgroundDrawList(mainVP);
+        draw_list->AddRect((const ImVec2&)rect.lt, (const ImVec2&)rect.rb, color.get_windows());
     }
 
     if (open)
@@ -584,14 +609,28 @@ void CUIWindow::FillDebugInfo()
     ImGui::DragFloat2("Position", (float*)&m_wndPos);
     ImGui::DragFloat2("Size", (float*)&m_wndSize);
 
-    ImGui::Checkbox("Visible", &m_bShowMe);
-    ImGui::Checkbox("Enabled", &m_bIsEnabled);
+    bool v = m_bShowMe;
+    if (ImGui::Checkbox("Visible", &v))
+        m_bShowMe = v;
+
+    v = m_bIsEnabled;
+    if (ImGui::Checkbox("Enabled", &v))
+        m_bIsEnabled = v;
 
     ImGui::Separator();
     ImGui::BeginDisabled();
-    ImGui::Checkbox("Auto delete", &m_bAutoDelete);
-    ImGui::Checkbox("Cursor over window", &m_bCursorOverWindow);
-    ImGui::Checkbox("Custom draw", &m_bCustomDraw);
+
+    v = m_bAutoDelete;
+    if (ImGui::Checkbox("Auto delete", &v))
+        m_bAutoDelete = v;
+
+    v = m_bCursorOverWindow;
+    if (ImGui::Checkbox("Cursor over window", &v))
+        m_bCursorOverWindow = v;
+
+    v = m_bCustomDraw;
+    if (ImGui::Checkbox("Custom draw", &v))
+        v = m_bCustomDraw;
 
     ImGui::DragFloat2("Last cursor position", (float*)&cursor_pos);
     ImGui::DragScalar("Last click time", ImGuiDataType_U32, &m_dwLastClickTime);

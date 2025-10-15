@@ -5,13 +5,8 @@
 #include "Threading/Lock.hpp"
 
 #include <string>
-#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
+#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
 #include <cstdio>
-#elif defined(XR_PLATFORM_WINDOWS)
-#pragma warning(push)
-#pragma warning(disable : 4091) /// 'typedef ': ignored on left of '' when no variable is declared
-#include <DbgHelp.h>
-#pragma warning(pop)
 #endif
 
 struct SDL_Window;
@@ -54,6 +49,7 @@ class XR_NOVTABLE IWindowHandler
 {
 public:
     virtual ~IWindowHandler() = 0;
+    virtual void* GetApplicationWindowHandle() const = 0;
     virtual SDL_Window* GetApplicationWindow() = 0;
     virtual void OnErrorDialog(bool beforeDialog) = 0;
     virtual void OnFatalError() = 0;
@@ -88,8 +84,9 @@ private:
 public:
     xrDebug() = delete;
     static void Initialize(pcstr commandLine);
-    static void Destroy();
+    static void Finalize();
     static void OnThreadSpawn();
+    static void OnThreadExit();
     static void OnFilesystemInitialized();
 
     static bool DebuggerIsPresent();
@@ -101,7 +98,8 @@ public:
     static void SetUserConfigHandler(IUserConfigHandler* handler) { userConfigHandler = handler; }
     static OutOfMemoryCallbackFunc GetOutOfMemoryCallback() { return OutOfMemoryCallback; }
     static void SetOutOfMemoryCallback(OutOfMemoryCallbackFunc cb) { OutOfMemoryCallback = cb; }
-    static const char* ErrorToString(long code);
+    static bool WouldShowErrorMessage() { return ShowErrorMessage; }
+    static pcstr ErrorToString(long code);
     static void SetBugReportFile(const char* fileName);
     static void GatherInfo(char* assertionInfo, size_t bufferSize, const ErrorLocation& loc, const char* expr,
                            const char* desc, const char* arg1 = nullptr, const char* arg2 = nullptr);
@@ -112,33 +110,25 @@ public:
                      const char* desc = "assertion failed", const char* arg1 = nullptr, const char* arg2 = nullptr);
     static AssertionResult Fail(bool& ignoreAlways, const ErrorLocation& loc, const char* expr, const std::string& desc,
                      const char* arg1 = nullptr, const char* arg2 = nullptr);
+    [[noreturn]]
     static void DoExit(const std::string& message);
 
     static AssertionResult ShowMessage(pcstr title, pcstr message, bool simpleMode = true);
 
     static void LogStackTrace(const char* header);
-    static xr_vector<xr_string> BuildStackTrace(u16 maxFramesCount = 512);
 
 private:
-    static bool symEngineInitialized;
-    static Lock dbgHelpLock;
     static Lock failLock;
 
     static void FormatLastError(char* buffer, const size_t& bufferSize);
     static void SetupExceptionHandler();
     static LONG WINAPI UnhandledFilter(EXCEPTION_POINTERS* exPtrs);
     static void WINAPI PreErrorHandler(INT_PTR);
-#if defined(XR_PLATFORM_WINDOWS)
-    static xr_vector<xr_string> BuildStackTrace(PCONTEXT threadCtx, u16 maxFramesCount);
-    static bool GetNextStackFrameString(LPSTACKFRAME stackFrame, PCONTEXT threadCtx, xr_string& frameStr);
-    static bool InitializeSymbolEngine();
-    static void DeinitializeSymbolEngine(void);
-#endif //XR_PLATFORM_WINDOWS
 };
 
 // forward declaration
 // Definition is in xrCore/_std_extensions.h
-inline int __cdecl xr_sprintf(pstr destination, size_t const buffer_size, LPCSTR format_string, ...);
+inline int __cdecl xr_sprintf(pstr destination, size_t const buffer_size, pcstr format_string, ...);
 
 // for debug purposes only
 template<typename... Args>

@@ -5,7 +5,10 @@
 #include "xrEngine/Environment.h"
 #include "xrCore/FMesh.hpp"
 #include "FTreeVisual.h"
+#include "Common/OGF_GContainer_Vertices.hpp"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 shared_str m_xform;
 shared_str m_xform_v;
 shared_str c_consts;
@@ -14,6 +17,8 @@ shared_str c_wind;
 shared_str c_c_bias;
 shared_str c_c_scale;
 shared_str c_c_sun;
+shared_str c_c_BendersPos;
+shared_str c_c_BendersSetup;
 
 FTreeVisual::FTreeVisual(void) {}
 FTreeVisual::~FTreeVisual(void) {}
@@ -22,7 +27,7 @@ void FTreeVisual::Load(const char* N, IReader* data, u32 dwFlags)
 {
     dxRender_Visual::Load(N, data, dwFlags);
 
-    VertexElement* vFormat = nullptr;
+    const VertexElement* vFormat = nullptr;
 
     // read vertices
     R_ASSERT(data->find_chunk(OGF_GCONTAINER));
@@ -64,6 +69,30 @@ void FTreeVisual::Load(const char* N, IReader* data, u32 dwFlags)
         // Msg				("hemi[%f / %f], sun[%f / %f]",c_scale.hemi,c_bias.hemi,c_scale.sun,c_bias.sun);
     }
 
+    /*if (RImplementation.o.ffp && dcl_equal(vFormat, mu_model_decl_unpacked))
+    {
+        const size_t vertices_size = vCount * sizeof(mu_model_vert_unpacked);
+
+        const auto new_buffer = xr_new<VertexStagingBuffer>();
+        new_buffer->Create(vertices_size);
+
+        auto vert_new = static_cast<mu_model_vert_unpacked*>(new_buffer->Map());
+        const auto vert_orig = static_cast<mu_model_vert_unpacked*>(p_rm_Vertices->Map(vBase, vertices_size, true)); // read-back
+        CopyMemory(vert_new, vert_orig, vertices_size);
+
+        for (size_t i = 0; i < vCount; ++i)
+        {
+            //vert_new->P.mul(xform.j);
+            ++vert_new;
+        }
+
+        new_buffer->Unmap(true);
+        p_rm_Vertices->Unmap(false);
+        _RELEASE(p_rm_Vertices);
+        p_rm_Vertices = new_buffer;
+        vBase = 0;
+    }*/
+
     // Geom
     rm_geom.create(vFormat, *p_rm_Vertices, *p_rm_Indices);
 
@@ -76,6 +105,8 @@ void FTreeVisual::Load(const char* N, IReader* data, u32 dwFlags)
     c_c_bias = "c_bias";
     c_c_scale = "c_scale";
     c_c_sun = "c_sun";
+    c_c_BendersPos = "benders_pos";
+    c_c_BendersSetup = "benders_setup";
 }
 
 struct FTreeVisual_setup
@@ -90,27 +121,19 @@ struct FTreeVisual_setup
     void calculate()
     {
         dwFrame = Device.dwFrame;
-
-        const float tm_rot = PI_MUL_2 * Device.fTimeGlobal / ps_r__Tree_w_rot;
+        CEnvDescriptor& desc = g_pGamePersistent->Environment().CurrentEnv;
 
         // Calc wind-vector3, scale
+        float tm_rot = PI_MUL_2 * Device.fTimeGlobal / desc.m_fTreeRotation;
 
         wind.set(_sin(tm_rot), 0, _cos(tm_rot), 0);
         wind.normalize();
-
-#if RENDER!=R_R1
-        const auto& env = g_pGamePersistent->Environment().CurrentEnv;
-        const float fValue = env.m_fTreeAmplitudeIntensity;
-        wind.mul(fValue); // dir1*amplitude
-#else
-        wind.mul(ps_r__Tree_w_amp); // dir1*amplitude
-#endif
+        wind.mul(desc.m_fTreeAmplitude); // dir1*amplitude
 
         scale = 1.f / float(FTreeVisual_quant);
 
         // setup constants
-        wave.set(
-            ps_r__Tree_Wave.x, ps_r__Tree_Wave.y, ps_r__Tree_Wave.z, Device.fTimeGlobal * ps_r__Tree_w_speed); // wave
+        wave.set(desc.m_fTreeWave.x, desc.m_fTreeWave.y, desc.m_fTreeWave.z, Device.fTimeGlobal * desc.m_fTreeSpeed); // wave
         wave.div(PI_MUL_2);
     }
 };
@@ -142,6 +165,45 @@ void FTreeVisual::Render(CBackend& cmd_list, float /*LOD*/, bool use_fast_geo)
         s * c_bias.rgb.z + desc.ambient.z, s * c_bias.hemi); // bias
 #endif
     cmd_list.tree.set_c_sun(s * c_scale.sun, s * c_bias.sun, 0, 0); // sun
+
+#if RENDER == R_R4
+    if (ps_ssfx_grass_interactive.y > 0)
+    {
+        // Inter grass Settings
+        cmd_list.set_c(c_c_BendersSetup, ps_ssfx_int_grass_params_1);
+
+        // Grass benders data ( Player + Characters )
+        IGame_Persistent::grass_data& GData = g_pGamePersistent->grass_shader_data;
+        Fvector4 player_pos = { 0, 0, 0, 0 };
+        int BendersQty = _min(16, (int)(ps_ssfx_grass_interactive.y + 1));
+
+        // Add Player?
+        if (ps_ssfx_grass_interactive.x > 0)
+        {
+            player_pos.set(Device.vCameraPosition.x, Device.vCameraPosition.y, Device.vCameraPosition.z, -1);
+        }
+
+        Fvector4* c_grass{};
+        {
+            void* GrassData;
+            cmd_list.get_ConstantDirect(c_c_BendersPos, BendersQty * sizeof(Fvector4) * 2, &GrassData, 0, 0);
+
+            c_grass = (Fvector4*)GrassData;
+        }
+
+        if (c_grass)
+        {
+            c_grass[0].set(player_pos);
+            c_grass[16].set(0.0f, -99.0f, 0.0f, 1.0f);
+
+            for (int Bend = 1; Bend < BendersQty; Bend++)
+            {
+                c_grass[Bend].set(GData.pos[Bend].x, GData.pos[Bend].y, GData.pos[Bend].z, GData.radius_curr[Bend]);
+                c_grass[Bend + 16].set(GData.dir[Bend].x, GData.dir[Bend].y, GData.dir[Bend].z, GData.str[Bend]);
+            }
+        }
+    }
+#endif
 }
 
 #define PCOPY(a) a = pFrom->a
@@ -225,3 +287,4 @@ void FTreeVisual_PM::Copy(dxRender_Visual* pSrc)
     FTreeVisual_PM* pFrom = dynamic_cast<FTreeVisual_PM*>(pSrc);
     PCOPY(pSWI);
 }
+} // namespace xray::render::RENDER_NAMESPACE

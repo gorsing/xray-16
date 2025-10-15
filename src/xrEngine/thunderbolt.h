@@ -14,6 +14,18 @@ class ENGINE_API IRender_DetailModel;
 class ENGINE_API CLAItem;
 class ENGINE_API CEnvDescriptorMixer;
 
+namespace xray::render
+{
+namespace render_r4
+{
+class dxThunderboltRender;
+}
+namespace render_gl
+{
+class dxThunderboltRender;
+}
+} // namespace xray::render
+
 struct ENGINE_API SThunderboltDesc
 {
     // geom
@@ -73,7 +85,8 @@ struct ENGINE_API SThunderboltCollection
 //
 class ENGINE_API CEffect_Thunderbolt
 {
-    friend class dxThunderboltRender;
+    friend class xray::render::render_r4::dxThunderboltRender;
+    friend class xray::render::render_gl::dxThunderboltRender;
 
 protected:
     xr_vector<SThunderboltCollection*> collections;
@@ -107,10 +120,9 @@ private:
     CInifile* m_thunderbolt_collections_config{};
     CInifile* m_thunderbolts_config{};
 
-public:
-    static constexpr float MAX_DIST_FACTOR = 0.95f;
 
     // params
+    static constexpr float MAX_DIST_FACTOR = 0.95f;
     Fvector2 p_var_alt;
     float p_var_long;
     float p_min_dist;
@@ -135,4 +147,6 @@ public:
 
     [[nodiscard]]
     auto& GetCollections() { return collections; }
+
+    void ED_ShowParams(); // ImGui editor
 };

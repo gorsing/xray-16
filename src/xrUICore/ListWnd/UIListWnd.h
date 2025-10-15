@@ -19,6 +19,7 @@ private:
 
     shared_str m_scrollbar_profile;
     void DrawActiveBackFrame(const Frect& rect, CUIListItem* itm);
+
 public:
     CUIListWnd();
     virtual ~CUIListWnd();
@@ -38,8 +39,6 @@ public:
     template <class Element>
     bool AddItem(const char* str, const float shift = 0.0f, void* pData = NULL,
                  int value = 0, int insertBeforeIdx = -1);
-
-    virtual bool AddItem_script(CUIListItem* item);
 
     template <class Element>
     bool AddItem(Element* pItem, int insertBeforeIdx = -1);
@@ -75,7 +74,7 @@ public:
 
     void ScrollToBegin();
     void ScrollToEnd();
-    void ScrollToPos(int position);
+    void ScrollToPos(int position, float center_y_ratio = 0.5f);
 
     IC bool IsActiveBackgroundEnabled() { return m_bActiveBackground; }
     void EnableActiveBackground(bool enable);
@@ -156,6 +155,9 @@ protected:
 
     // Текущий уникальный идентификатор
     int m_iLastUniqueID;
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CUIWindow);
 };
 
 #include "UIListWnd_inline.h"

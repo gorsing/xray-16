@@ -6,14 +6,17 @@
 #if !defined(AFX_GAMEOBJECT_H__3DA72D03_C759_4688_AEBB_89FA812AA873__INCLUDED_)
 #define AFX_GAMEOBJECT_H__3DA72D03_C759_4688_AEBB_89FA812AA873__INCLUDED_
 
+#include <atomic>
+
 #include "xrEngine/xr_object.h"
+
 #include "xrServer_Space.h"
 #include "alife_space.h"
-#include "xrScriptEngine/script_space_forward.hpp"
-#include "xrScriptEngine/DebugMacros.hpp" // XXX: move debug macros to xrCore
 #include "script_binder.h"
 #include "Hit.h"
 #include "game_object_space.h"
+
+#include "xrScriptEngine/script_space_forward.hpp"
 
 class CPhysicsShell;
 class CSE_Abstract;
@@ -72,7 +75,7 @@ protected:
     u32 dbg_update_cl;
 #endif
     u32 dwFrame_UpdateCL;
-    u32 dwFrame_AsCrow;
+    std::atomic_uint32_t dwFrame_AsCrow;
 
 private:
     shared_str m_sTipText;
@@ -92,7 +95,6 @@ private:
     ai_obstacle* m_ai_obstacle;
     Fmatrix m_previous_matrix;
     CALLBACK_VECTOR m_visual_callback;
-    Lock render_lock{};
 
 protected:
     CScriptBinder scriptBinder;
@@ -198,7 +200,7 @@ public:
     virtual CEntity* cast_entity() override { return NULL; }
     virtual CEntityAlive* cast_entity_alive() override { return NULL; }
     virtual CActor* cast_actor() override { return NULL; }
-    virtual CGameObject* cast_game_object() override { return this; }
+    CGameObject* cast_game_object() { return this; }
     virtual CCustomZone* cast_custom_zone() override { return NULL; }
     virtual CPhysicsShellHolder* cast_physics_shell_holder() override { return NULL; }
     virtual IInputReceiver* cast_input_receiver() override { return NULL; }
@@ -321,7 +323,7 @@ public:
     virtual CScriptGameObject* lua_game_object() const override;
     virtual int clsid() const override
     {
-        THROW(m_script_clsid >= 0);
+        VERIFY(m_script_clsid >= 0);
         return m_script_clsid;
     }
     virtual CInifile* spawn_ini() override { return m_ini_file; }
@@ -329,6 +331,10 @@ public:
     {
         VERIFY(m_ai_location);
         return *m_ai_location;
+    }
+    virtual bool is_spawned() const override
+    {
+        return m_spawned;
     }
     virtual u32 spawn_time() const override
     {
@@ -384,6 +390,9 @@ private: // XXX: move to GameObjectBase
     u32 new_level_vertex_id() const;
     void update_ai_locations(bool decrement_reference);
     void SetKinematicsCallback(bool set);
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 };
 #pragma pack(pop)
 

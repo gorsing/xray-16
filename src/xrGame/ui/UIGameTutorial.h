@@ -50,11 +50,11 @@ public:
     virtual void IR_OnKeyboardRelease(int dik);
     virtual void IR_OnKeyboardHold(int dik);
 
-    void IR_OnControllerPress(int key, float x, float y) override;
-    void IR_OnControllerRelease(int key, float x, float y) override;
-    void IR_OnControllerHold(int key, float x, float y) override;
+    void IR_OnControllerPress(int key, const ControllerAxisState& state) override;
+    void IR_OnControllerRelease(int key, const ControllerAxisState& state) override;
+    void IR_OnControllerHold(int key, const ControllerAxisState& state) override;
 
-    virtual void IR_OnMouseWheel(int x, int y);
+    virtual void IR_OnMouseWheel(float x, float y);
     virtual void IR_OnActivate(void);
     bool Persistent() { return !!m_flags.test(etsPersistent); }
     pcstr GetTutorName() { return m_name; }
@@ -122,17 +122,20 @@ public:
 class CUISequenceSimpleItem : public CUISequenceItem
 {
     typedef CUISequenceItem inherited;
-    struct SSubItem
+    struct SSubItem final
     {
         CUIStatic* m_wnd;
-        float m_start;
-        float m_length;
-        bool m_visible;
+        float m_start{};
+        float m_length{};
+        bool m_visible{};
 
-        virtual void Start();
-        virtual void Stop();
+        SSubItem(CUIStatic* wnd) : m_wnd(wnd)
+        {
+            R_ASSERT(m_wnd);
+        }
 
-        virtual ~SSubItem() = default;
+        void Start();
+        void Stop();
     };
     using SubItemVec = xr_vector<SSubItem>;
     SubItemVec m_subitems;
@@ -142,6 +145,8 @@ class CUISequenceSimpleItem : public CUISequenceItem
         shared_str m_functor;
         bool m_bfinalize;
     };
+
+    bool isTimeDilatedInPDA;
 
 public:
     CUIWindow* m_UIWindow;

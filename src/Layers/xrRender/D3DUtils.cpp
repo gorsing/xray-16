@@ -1,5 +1,3 @@
-// file: D3DUtils.cpp
-
 #include "stdafx.h"
 #pragma hdrstop
 
@@ -12,6 +10,8 @@
 #include "du_cylinder.h"
 #include "xrCore/_obb.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 CDrawUtilities DUImpl;
 
 #define LINE_DIVISION 32 // не меньше 6!!!!!
@@ -194,6 +194,7 @@ void CDrawUtilities::UpdateGrid(int number_of_cell, float square_size, int subdi
 
 void CDrawUtilities::OnDeviceCreate()
 {
+    ZoneScoped;
     Device.seqRender.Add(this, REG_PRIORITY_LOW - 1000);
 
     m_SolidBox.CreateFromData(D3DPT_TRIANGLELIST, DU_BOX_NUMFACES, D3DFVF_XYZ | D3DFVF_DIFFUSE, du_box_vertices,
@@ -1506,3 +1507,4 @@ void CDrawUtilities::OutText(const Fvector& pos, LPCSTR text, u32 color, u32 sha
         m_Font->Out(p.x - 1, p.y - 1, (pstr)text);
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

@@ -7,15 +7,16 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "pch_script.h"
+
 #include "script_movement_action.h"
 #include "script_game_object.h"
 #include "detail_path_manager_space.h"
 #include "ai_monster_space.h"
+
 #include "xrAICore/Navigation/PatrolPath/patrol_path_params.h"
 #include "xrAICore/Navigation/PatrolPath/patrol_path.h"
-#include "xrScriptEngine/ScriptExporter.hpp"
 
-SCRIPT_EXPORT(CScriptMovementAction, (),
+void CScriptMovementAction::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -108,9 +109,12 @@ SCRIPT_EXPORT(CScriptMovementAction, (),
             .def("move", &CScriptMovementAction::SetMovementType)
             .def("path", &CScriptMovementAction::SetPathType)
             .def("object", &CScriptMovementAction::SetObjectToGo)
-            .def("patrol", &CScriptMovementAction::SetPatrolPath)
+            .def("patrol", +[](CScriptMovementAction* self, const CPatrolPath* path, pcstr path_name)
+            {
+                self->SetPatrolPath(path, path_name);
+            })
             .def("position", &CScriptMovementAction::SetPosition)
             .def("input", &CScriptMovementAction::SetInputKeys)
             .def("completed", &CScriptAbstractAction::completed)
     ];
-});
+}

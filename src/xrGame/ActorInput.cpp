@@ -30,14 +30,13 @@
 #include "clsid_game.h"
 #include "HUDManager.h"
 #include "Weapon.h"
-
-extern u32 hud_adj_mode;
+#include "GamePersistent.h"
 
 bool g_bAutoClearCrouch = true;
 
 void CActor::IR_OnKeyboardPress(int cmd)
 {
-    if (hud_adj_mode && pInput->iGetAsyncKeyState(SDL_SCANCODE_LSHIFT))
+    if (GamePersistent().GetHudTuner().is_active())
         return;
 
     if (Remote())
@@ -201,7 +200,7 @@ void CActor::IR_OnKeyboardPress(int cmd)
             StaticDrawableWrapper* _s = CurrentGameUI()->AddCustomStatic("item_used", true, compat ? 3.0f : -1.0f);
 
             string1024 str;
-            strconcat(sizeof(str), str, *StringTable().translate("st_item_used"), ": ", itm->NameItem());
+            strconcat(sizeof(str), str, StringTable().translate("st_item_used").c_str(), ": ", itm->NameItem());
             _s->wnd()->SetText(str);
             if (quickSlot)
                 CurrentGameUI()->GetActorMenu().m_pQuickSlot->ReloadReferences(this);
@@ -211,15 +210,12 @@ void CActor::IR_OnKeyboardPress(int cmd)
     }
 }
 
-void CActor::IR_OnMouseWheel(int x, int y)
+void CActor::IR_OnMouseWheel(float x, float y)
 {
-    if (hud_adj_mode)
-    {
-        g_player_hud->tune(Ivector().set(0, 0, y));
+    if (GamePersistent().GetHudTuner().is_active())
         return;
-    }
 
-    if (inventory().Action((y > 0) ? (u16)kWPN_ZOOM_DEC : (u16)kWPN_ZOOM_INC, CMD_START))
+    if (inventory().Action((y > 0) ? (u16)kWPN_ZOOM_INC : (u16)kWPN_ZOOM_DEC, CMD_START))
         return;
 
     if (y > 0)
@@ -230,7 +226,7 @@ void CActor::IR_OnMouseWheel(int x, int y)
 
 void CActor::IR_OnKeyboardRelease(int cmd)
 {
-    if (hud_adj_mode && pInput->iGetAsyncKeyState(SDL_SCANCODE_LSHIFT))
+    if (GamePersistent().GetHudTuner().is_active())
         return;
 
     if (Remote())
@@ -272,7 +268,7 @@ void CActor::IR_OnKeyboardRelease(int cmd)
 
 void CActor::IR_OnKeyboardHold(int cmd)
 {
-    if (hud_adj_mode && pInput->iGetAsyncKeyState(SDL_SCANCODE_LSHIFT))
+    if (GamePersistent().GetHudTuner().is_active())
         return;
 
     if (Remote() || !g_Alive())
@@ -336,27 +332,24 @@ void CActor::IR_OnKeyboardHold(int cmd)
     }
 }
 
-void CActor::OnAxisMove(float x, float y, float scale, bool invert)
+void CActor::OnAxisMove(float x, float y, float scaleX, float scaleY, bool invertX, bool invertY)
 {
     if (!fis_zero(x))
     {
-        const float d = x * scale;
+        const float d = (invertX ? -1.f : 1.f) * x * scaleX;
         cam_Active()->Move((d < 0) ? kLEFT : kRIGHT, _abs(d));
     }
     if (!fis_zero(y))
     {
-        const float d = (invert ? -1.f : 1.f) * y * scale * 3.f / 4.f;
+        const float d = (invertY ? -1.f : 1.f) * y * scaleY * 3.f / 4.f;
         cam_Active()->Move((d > 0) ? kUP : kDOWN, _abs(d));
     }
 }
 
 void CActor::IR_OnMouseMove(int dx, int dy)
 {
-    if (hud_adj_mode)
-    {
-        g_player_hud->tune(Ivector().set(dx, dy, 0));
+    if (GamePersistent().GetHudTuner().is_active())
         return;
-    }
 
     PIItem iitem = inventory().ActiveItem();
     if (iitem && iitem->cast_hud_item())
@@ -370,13 +363,13 @@ void CActor::IR_OnMouseMove(int dx, int dy)
         m_holder->OnMouseMove(dx, dy);
         return;
     }
-    
+
     const float LookFactor = GetLookFactor();
     const float scale = (cam_Active()->f_fov / g_fov) * psMouseSens * psMouseSensScale / 50.f / LookFactor;
-    OnAxisMove(float(dx), float(dy), scale, psMouseInvert.test(1));
+    OnAxisMove(float(dx), float(dy), scale, scale, false, psMouseInvert.test(1));
 }
 
-void CActor::IR_OnControllerPress(int cmd, float x, float y)
+void CActor::IR_OnControllerPress(int cmd, const ControllerAxisState& state)
 {
     switch (cmd)
     {
@@ -404,7 +397,7 @@ void CActor::IR_OnControllerPress(int cmd, float x, float y)
 
     if (m_holder && kUSE != cmd)
     {
-        m_holder->OnControllerPress(cmd, x, y);
+        m_holder->OnControllerPress(cmd, state);
 
         if (m_holder->allowWeapon())
             inventory().Action((u16)cmd, CMD_START);
@@ -415,34 +408,40 @@ void CActor::IR_OnControllerPress(int cmd, float x, float y)
     {
     case kLOOK_AROUND:
     {
-        const float LookFactor = GetLookFactor();
-        float scale = (cam_Active()->f_fov / g_fov) * psControllerStickSens * psControllerStickSensScale / 50.f / LookFactor;
-        OnAxisMove(x, y, scale, psControllerInvertY.test(1));
+        const auto fov = cam_Active()->f_fov;
+        const float lookFactor = GetLookFactor();
+
+        const float scale  = Device.fTimeDeltaReal * psLookIntensityMin * (fov / g_fov) * psControllerStickSensScale / lookFactor;
+        const float scaleX = scale * psControllerStickSensX;
+        const float scaleY = scale * psControllerStickSensY;
+
+        OnAxisMove(state.x, state.y, scaleX, scaleY, psControllerFlags.test(ControllerInvertX), psControllerFlags.test(ControllerInvertY));
         break;
     }
 
     case kMOVE_AROUND:
     {
-        if (!fis_zero(x))
+        if (state.magnitude < 0.5f)
+            mstate_wishful |= mcAccel;
+
+        if (!fis_zero(state.x))
         {
-            if (x > 35.f)
+            if (state.x > 0.3f)
                 mstate_wishful |= mcRStrafe;
-            else if (x < -35.f)
+            else if (state.x < -0.3f)
                 mstate_wishful |= mcLStrafe;
         }
-        if (!fis_zero(y))
+        if (!fis_zero(state.y))
         {
-            if (y > 35.f)
+            if (state.y > 0.3f)
                 mstate_wishful |= mcBack;
-            else if (y < -35.f)
+            else if (state.y < -0.3f)
+            {
                 mstate_wishful |= mcFwd;
 
-            if (std::abs(y) < 65.f)
-                mstate_wishful |= mcAccel;
-            else if (y < -85.f)
-                mstate_wishful |= mcSprint;
-            else
-                mstate_wishful &= ~mcSprint;
+                if (state.y < -0.95f)
+                    mstate_wishful |= mcSprint;
+            }
         }
         break;
     }
@@ -454,7 +453,7 @@ void CActor::IR_OnControllerPress(int cmd, float x, float y)
     } // switch (GetBindedAction(axis))}
 }
 
-void CActor::IR_OnControllerRelease(int cmd, float x, float y)
+void CActor::IR_OnControllerRelease(int cmd, const ControllerAxisState& state)
 {
     if (Remote() || !g_Alive())
         return;
@@ -464,7 +463,7 @@ void CActor::IR_OnControllerRelease(int cmd, float x, float y)
 
     if (m_holder)
     {
-        m_holder->OnControllerRelease(cmd, x, y);
+        m_holder->OnControllerRelease(cmd, state);
 
         if (m_holder->allowWeapon())
             inventory().Action((u16)cmd, CMD_STOP);
@@ -484,7 +483,7 @@ void CActor::IR_OnControllerRelease(int cmd, float x, float y)
     }
 }
 
-void CActor::IR_OnControllerHold(int cmd, float x, float y)
+void CActor::IR_OnControllerHold(int cmd, const ControllerAxisState& state)
 {
     if (cmd == kLOOK_AROUND)
     {
@@ -502,7 +501,7 @@ void CActor::IR_OnControllerHold(int cmd, float x, float y)
 
     if (m_holder)
     {
-        m_holder->OnControllerHold(cmd, x, y);
+        m_holder->OnControllerHold(cmd, state);
         return;
     }
 
@@ -510,34 +509,50 @@ void CActor::IR_OnControllerHold(int cmd, float x, float y)
     {
     case kLOOK_AROUND:
     {
-        const float LookFactor = GetLookFactor();
-        float scale = (cam_Active()->f_fov / g_fov) * psControllerStickSens * psControllerStickSensScale / 50.f / LookFactor;
-        OnAxisMove(x, y, scale, psControllerInvertY.test(1));
+        static float intensity = psLookIntensityMin;
+
+        const auto fov = cam_Active()->f_fov;
+        const float lookFactor = GetLookFactor();
+
+        const float scale  = Device.fTimeDeltaReal * intensity * (fov / g_fov) * psControllerStickSensScale / lookFactor;
+        const float scaleX = scale * psControllerStickSensX;
+        const float scaleY = scale * psControllerStickSensY;
+
+        if (state.magnitude > 0.99f)
+            intensity += psLookIntensityStep;
+        else if (state.magnitude > 0.1f)
+            intensity -= psLookIntensityStep;
+        else
+            intensity -= 5 * psLookIntensityStep;
+        clamp(intensity, psLookIntensityMin, psLookIntensityMax);
+
+        OnAxisMove(state.x, state.y, scaleX, scaleY, psControllerFlags.test(ControllerInvertX), psControllerFlags.test(ControllerInvertY));
         break;
     }
 
     case kMOVE_AROUND:
     {
-        if (!fis_zero(x))
+        if (state.magnitude < 0.5f)
+            mstate_wishful |= mcAccel;
+
+        if (!fis_zero(state.x))
         {
-            if (x > 35.f)
+            if (state.x > 0.3f)
                 mstate_wishful |= mcRStrafe;
-            else if (x < -35.f)
+            else if (state.x < -0.3f)
                 mstate_wishful |= mcLStrafe;
         }
-        if (!fis_zero(y))
+        if (!fis_zero(state.y))
         {
-            if (y > 35.f)
+            if (state.y > 0.3f)
                 mstate_wishful |= mcBack;
-            else if (y < -35.f)
+            else if (state.y < -0.3f)
+            {
                 mstate_wishful |= mcFwd;
 
-            if (std::abs(y) < 65.f)
-                mstate_wishful |= mcAccel;
-            else if (y < -85.f)
-                mstate_wishful |= mcSprint;
-            else
-                mstate_wishful &= ~mcSprint;
+                if (state.y < -0.95f)
+                    mstate_wishful |= mcSprint;
+            }
         }
         break;
     }
@@ -566,10 +581,10 @@ void CActor::IR_OnControllerAttitudeChange(Fvector change)
         m_holder->OnControllerAttitudeChange(change);
         return;
     }
-    
+
     const float LookFactor = GetLookFactor();
     const float scale = (cam_Active()->f_fov / g_fov) * psControllerSensorSens / 50.f / LookFactor;
-    OnAxisMove(change.x, change.y, scale, psControllerInvertY.test(1));
+    OnAxisMove(change.x, change.y, scale, scale, psControllerFlags.test(ControllerInvertX), psControllerFlags.test(ControllerInvertY));
 }
 
 #include "HudItem.h"
@@ -582,8 +597,8 @@ bool CActor::use_Holder(CHolderCustom* holder)
 
         if (smart_cast<CCar*>(holderGO))
             b = use_Vehicle(0);
-        else if (holderGO->CLS_ID == CLSID_OBJECT_W_STATMGUN)
-            b = use_MountedWeapon(0);
+        else if (holderGO->CLS_ID == CLSID_OBJECT_W_STATMGUN || holderGO->CLS_ID==CLSID_OBJECT_HOLDER_ENT)
+            b = use_HolderEx(0, false);
 
         if (inventory().ActiveItem())
         {
@@ -601,8 +616,8 @@ bool CActor::use_Holder(CHolderCustom* holder)
         if (smart_cast<CCar*>(holder))
             b = use_Vehicle(holder);
 
-        if (holderGO->CLS_ID == CLSID_OBJECT_W_STATMGUN)
-            b = use_MountedWeapon(holder);
+        if (holderGO->CLS_ID == CLSID_OBJECT_W_STATMGUN || holderGO->CLS_ID==CLSID_OBJECT_HOLDER_ENT)
+            b = use_HolderEx(holder, false);
 
         if (b)
         { // used succesfully

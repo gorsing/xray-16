@@ -7,6 +7,8 @@
 #include "glHW.h"
 #include "xrEngine/XR_IOConsole.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 CHW HW;
 
 void CALLBACK OnDebugCallback(GLenum /*source*/, GLenum /*type*/, GLuint id, GLenum severity, GLsizei /*length*/,
@@ -15,6 +17,8 @@ void CALLBACK OnDebugCallback(GLenum /*source*/, GLenum /*type*/, GLuint id, GLe
     if (severity != GL_DEBUG_SEVERITY_NOTIFICATION)
         Log(message, id);
 }
+
+static_assert(std::is_same_v<decltype(&OnDebugCallback), GLDEBUGPROC>);
 
 void UpdateVSync()
 {
@@ -70,6 +74,8 @@ void CHW::OnAppDeactivate()
 //////////////////////////////////////////////////////////////////////
 void CHW::CreateDevice(SDL_Window* hWnd)
 {
+    ZoneScoped;
+
     m_window = hWnd;
 
     R_ASSERT(m_window);
@@ -81,70 +87,52 @@ void CHW::CreateDevice(SDL_Window* hWnd)
     // Apply the pixel format to the device context
     SDL_SetWindowDisplayMode(m_window, &mode);
 
+    Caps.fTarget = D3DFMT_A8R8G8B8;
+    Caps.fDepth = D3DFMT_D24S8;
+
     // Create the context
     m_context = SDL_GL_CreateContext(m_window);
     if (m_context == nullptr)
     {
-        Log("! Could not create drawing context:", SDL_GetError());
+        Log("! OpenGL: could not create drawing context:", SDL_GetError());
         return;
     }
 
     if (MakeContextCurrent(IRender::PrimaryContext) != 0)
     {
-        Log("! Could not make context current:", SDL_GetError());
+        Log("! OpenGL: could not make context current:", SDL_GetError());
         return;
     }
 
+    int version;
     {
-        const Uint32 flags = SDL_WINDOW_BORDERLESS | SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL;
-
-        m_helper_window = SDL_CreateWindow("OpenXRay OpenGL helper window", 0, 0, 1, 1, flags);
-        R_ASSERT3(m_helper_window, "Cannot create helper window for OpenGL", SDL_GetError());
-
-        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 1);
-
-        // Create helper context
-        m_helper_context = SDL_GL_CreateContext(m_helper_window);
-        R_ASSERT3(m_helper_context, "Cannot create OpenGL context", SDL_GetError());
-
-        // just in case
-        SDL_GL_SetAttribute(SDL_GL_SHARE_WITH_CURRENT_CONTEXT, 0);
+        ZoneScopedN("gladLoadGL");
+        version = gladLoadGL(reinterpret_cast<GLADloadfunc>(SDL_GL_GetProcAddress));
     }
-
-    if (MakeContextCurrent(IRender::PrimaryContext) != 0)
+    if (version == 0)
     {
-        Log("! Could not make context current after creating helper context:", SDL_GetError());
+        Log("! OpenGL: could not initialize GLAD.");
+        if (const auto err = SDL_GetError())
+            Log("SDL Error:", err);
         return;
     }
 
-    // Initialize OpenGL Extension Wrangler
-#ifdef XR_PLATFORM_APPLE
-    // This is essential for complete OpenGL 4.1 load on mac
-    glewExperimental = GL_TRUE;
-#endif
-    GLenum err = glewInit();
-    if (GLEW_OK != err)
+    if (ThisInstanceIsGlobal())
     {
-        Log("! Could not initialize glew:", (pcstr)glewGetErrorString(err));
-        return;
-    }
-
-    UpdateVSync();
+        UpdateVSync();
 
 #ifdef DEBUG
-    if (GLEW_KHR_debug)  // NOTE: this extension is only available starting with OpenGL 4.3
-    {
-        CHK_GL(glEnable(GL_DEBUG_OUTPUT));
-        CHK_GL(glDebugMessageCallback((GLDEBUGPROC)OnDebugCallback, nullptr));
-    }
+        if (glDebugMessageCallback)
+        {
+            CHK_GL(glEnable(GL_DEBUG_OUTPUT));
+            CHK_GL(glDebugMessageCallback((GLDEBUGPROC)OnDebugCallback, nullptr));
+        }
 #endif // DEBUG
+    }
 
     int iMaxVTFUnits, iMaxCTIUnits;
     glGetIntegerv(GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS, &iMaxVTFUnits);
     glGetIntegerv(GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS, &iMaxCTIUnits);
-
-    glGetIntegerv(GL_MAJOR_VERSION, &(std::get<0>(OpenGLVersion)));
-    glGetIntegerv(GL_MINOR_VERSION, &(std::get<1>(OpenGLVersion)));
 
     AdapterName = reinterpret_cast<pcstr>(glGetString(GL_RENDERER));
     OpenGLVersionString = reinterpret_cast<pcstr>(glGetString(GL_VERSION));
@@ -155,26 +143,23 @@ void CHW::CreateDevice(SDL_Window* hWnd)
     Msg("* GPU OpenGL shading language version: %s", ShadingVersion);
     Msg("* GPU OpenGL VTF units: [%d] CTI units: [%d]", iMaxVTFUnits, iMaxCTIUnits);
 
-    SeparateShaderObjectsSupported = GLEW_ARB_separate_shader_objects;
-    ShaderBinarySupported = GLEW_ARB_get_program_binary;
     ComputeShadersSupported = false; // XXX: Implement compute shaders support
 
-    Caps.fTarget = D3DFMT_A8R8G8B8;
-    Caps.fDepth = D3DFMT_D24S8;
-
-    //	Create render target and depth-stencil views here
-    UpdateViews();
+    if (glGenFramebuffers && glBindFramebuffer)
+        UpdateViews();
 }
 
 void CHW::DestroyDevice()
 {
-    SDL_GL_MakeCurrent(nullptr, nullptr);
+    CHK_GL(glDeleteFramebuffers(1, &pFB));
+    pFB = 0;
+
+    const auto context = SDL_GL_GetCurrentContext();
+    if (context == m_context)
+        SDL_GL_MakeCurrent(nullptr, nullptr);
 
     SDL_GL_DeleteContext(m_context);
     m_context = nullptr;
-
-    SDL_GL_DeleteContext(m_helper_context);
-    m_helper_context = nullptr;
 }
 
 //////////////////////////////////////////////////////////////////////
@@ -182,8 +167,12 @@ void CHW::DestroyDevice()
 //////////////////////////////////////////////////////////////////////
 void CHW::Reset()
 {
+    ZoneScoped;
+
     CHK_GL(glDeleteFramebuffers(1, &pFB));
+    pFB = 0;
     UpdateViews();
+
     UpdateVSync();
 }
 
@@ -214,8 +203,6 @@ IRender::RenderContext CHW::GetCurrentContext() const
     const auto context = SDL_GL_GetCurrentContext();
     if (context == m_context)
         return IRender::PrimaryContext;
-    if (context == m_helper_context)
-        return IRender::HelperContext;
     return IRender::NoContext;
 }
 
@@ -228,9 +215,6 @@ int CHW::MakeContextCurrent(IRender::RenderContext context) const
 
     case IRender::PrimaryContext:
         return SDL_GL_MakeCurrent(m_window, m_context);
-
-    case IRender::HelperContext:
-        return SDL_GL_MakeCurrent(m_helper_window, m_helper_context);
 
     default:
         NODEFAULT;
@@ -289,12 +273,13 @@ bool CHW::ThisInstanceIsGlobal() const
 
 void CHW::BeginPixEvent(pcstr name) const
 {
-    if (GLEW_KHR_debug)
+    if (glPushDebugGroup)
         glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, name);
 }
 
 void CHW::EndPixEvent() const
 {
-    if (GLEW_KHR_debug)
+    if (glPushDebugGroup)
         glPopDebugGroup();
 }
+} // namespace xray::render::RENDER_NAMESPACE

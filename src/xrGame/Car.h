@@ -215,9 +215,7 @@ public:
         float GetSteerAngle();
 
         void Init();
-        void SteerRight();
-        void SteerLeft();
-        void SteerIdle();
+        void Steer(float angle);
         void Limit();
         void Load(LPCSTR /*section*/){};
     };
@@ -465,9 +463,7 @@ private:
     float DriveWheelsMeanAngleRate();
     IC float EngineRpmFromWheels() { return _abs(DriveWheelsMeanAngleRate() * m_current_gear_ratio); }
     /////////////////////////////////////////////////////////////////////////
-    void SteerRight();
-    void SteerLeft();
-    void SteerIdle();
+    void Steer(float angle);
     void Transmission(size_t num);
     void CircleSwitchTransmission();
     void TransmissionUp();
@@ -534,8 +530,11 @@ public:
     }
 
     bool isActiveEngine	();
+
+    float GetRPM() const { return m_current_rpm; }
+    void SetRPM(float val) { m_current_rpm = val; }
     /***** added by Ray Twitty (aka Shadows) END *****/
-  
+
 
 private:
     void OnCameraChange(int type);
@@ -588,7 +587,7 @@ public:
     virtual void net_Relcase(IGameObject* O);
 
     // Input
-    void OnAxisMove(float x, float y, float scale, bool invert);
+    void OnAxisMove(float x, float y, float scaleX, float scaleY, bool invertX, bool invertY);
 
     virtual void OnMouseMove(int x, int y);
 
@@ -596,9 +595,9 @@ public:
     virtual void OnKeyboardRelease(int dik);
     virtual void OnKeyboardHold(int dik);
 
-    void OnControllerPress(int cmd, float x, float y) override;
-    void OnControllerHold(int cmd, float x, float y) override;
-    void OnControllerRelease(int cmd, float x, float y) override;
+    void OnControllerPress(int cmd, const ControllerAxisState& state) override;
+    void OnControllerHold(int cmd, const ControllerAxisState& state) override;
+    void OnControllerRelease(int cmd, const ControllerAxisState& state) override;
 
     void OnControllerAttitudeChange(Fvector change) override;
 
@@ -672,4 +671,6 @@ private:
     virtual CHolderCustom* cast_holder_custom() { return this; }
 private:
     car_memory* m_memory;
+
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CGameObject, CHolderCustom);
 };

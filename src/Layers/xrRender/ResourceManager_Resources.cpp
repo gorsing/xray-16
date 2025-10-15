@@ -1,5 +1,9 @@
 #include "stdafx.h"
 
+#include <FlexibleVertexFormat.h>
+
+namespace xray::render::RENDER_NAMESPACE
+{
 void fix_texture_name(pstr fn);
 
 void simplify_texture(string_path& fn)
@@ -27,7 +31,7 @@ void simplify_texture(string_path& fn)
 
 SState* CResourceManager::_CreateState(SimulatorStates& state_code)
 {
-    // Search equal state-code 
+    // Search equal state-code
     for (SState* C : v_states)
     {
         SimulatorStates& base = C->state_code;
@@ -118,14 +122,14 @@ void CResourceManager::_DeleteRT(const CRT* RT)
 {
     if (0 == (RT->dwFlags & xr_resource_flagged::RF_REGISTERED))
         return;
-    pstr N = pstr(*RT->cName);
+    pstr N = pstr(RT->cName.c_str());
     map_RT::iterator I = m_rtargets.find(N);
     if (I != m_rtargets.end())
     {
         m_rtargets.erase(I);
         return;
     }
-    Msg("! ERROR: Failed to find render-target '%s'", *RT->cName);
+    Msg("! ERROR: Failed to find render-target '%s'", RT->cName.c_str());
 }
 
 //	DX10 cut
@@ -164,6 +168,40 @@ void	CResourceManager::_DeleteRTC(const CRTC* RT)
 }
 */
 
+SGeometry* CResourceManager::CreateGeom(const VertexElement* decl, VertexBufferHandle vb, IndexBufferHandle ib)
+{
+    R_ASSERT(decl && vb);
+
+    SDeclaration* dcl = _CreateDecl(decl);
+    u32 vb_stride = GetDeclVertexSize(decl, 0);
+
+    // ***** first pass - search already loaded shader
+    for (SGeometry* geom : v_geoms)
+    {
+        SGeometry& G = *geom;
+        if (G.dcl == dcl && G.vb == vb && G.ib == ib && G.vb_stride == vb_stride)
+            return geom;
+    }
+
+    SGeometry* Geom = v_geoms.emplace_back(xr_new<SGeometry>());
+    Geom->dwFlags |= xr_resource_flagged::RF_REGISTERED;
+    Geom->dcl = dcl;
+    Geom->vb = vb;
+    Geom->vb_stride = vb_stride;
+    Geom->ib = ib;
+
+    return Geom;
+}
+
+SGeometry* CResourceManager::CreateGeom(u32 FVF, VertexBufferHandle vb, IndexBufferHandle ib)
+{
+    thread_local xr_vector<VertexElement> decl;
+    [[maybe_unused]] const bool result = ::FVF::CreateDeclFromFVF(FVF, decl);
+    VERIFY(result);
+    SGeometry* g = CreateGeom(decl.data(), vb, ib);
+    return g;
+}
+
 void CResourceManager::DeleteGeom(const SGeometry* Geom)
 {
     if (0 == (Geom->dwFlags & xr_resource_flagged::RF_REGISTERED))
@@ -183,7 +221,7 @@ void CResourceManager::DBG_VerifyGeoms()
     D3DVERTEXELEMENT9		test	[MAX_FVF_DECL_SIZE];
     u32						size	= 0;
     G->dcl->GetDeclaration			(test,(unsigned int*)&size);
-    u32 vb_stride					= D3DXGetDeclVertexSize	(test,0);
+    u32 vb_stride					= GetDeclVertexSize	(test,0);
     u32 vb_stride_cached			= G->vb_stride;
     R_ASSERT						(vb_stride == vb_stride_cached);
     }
@@ -225,14 +263,14 @@ void CResourceManager::_DeleteTexture(const CTexture* T)
 
     if (0 == (T->dwFlags & xr_resource_flagged::RF_REGISTERED))
         return;
-    pstr N = pstr(*T->cName);
+    pstr N = pstr(T->cName.c_str());
     map_Texture::iterator I = m_textures.find(N);
     if (I != m_textures.end())
     {
         m_textures.erase(I);
         return;
     }
-    Msg("! ERROR: Failed to find texture surface '%s'", *T->cName);
+    Msg("! ERROR: Failed to find texture surface '%s'", T->cName.c_str());
 }
 
 #ifdef DEBUG
@@ -245,7 +283,7 @@ void CResourceManager::DBG_VerifyTextures()
         R_ASSERT(I->first);
         R_ASSERT(I->second);
         R_ASSERT(I->second->cName);
-        R_ASSERT(0 == xr_strcmp(I->first, *I->second->cName));
+        R_ASSERT(0 == xr_strcmp(I->first, I->second->cName.c_str()));
     }
 }
 #endif
@@ -274,14 +312,14 @@ void CResourceManager::_DeleteMatrix(const CMatrix* M)
 {
     if (0 == (M->dwFlags & xr_resource_flagged::RF_REGISTERED))
         return;
-    pstr N = pstr(*M->cName);
+    pstr N = pstr(M->cName.c_str());
     map_Matrix::iterator I = m_matrices.find(N);
     if (I != m_matrices.end())
     {
         m_matrices.erase(I);
         return;
     }
-    Msg("! ERROR: Failed to find xform-def '%s'", *M->cName);
+    Msg("! ERROR: Failed to find xform-def '%s'", M->cName.c_str());
 }
 
 void CResourceManager::ED_UpdateMatrix(LPCSTR Name, CMatrix* data)
@@ -313,14 +351,14 @@ void CResourceManager::_DeleteConstant(const CConstant* C)
 {
     if (0 == (C->dwFlags & xr_resource_flagged::RF_REGISTERED))
         return;
-    pstr N = pstr(*C->cName);
+    pstr N = pstr(C->cName.c_str());
     map_Constant::iterator I = m_constants.find(N);
     if (I != m_constants.end())
     {
         m_constants.erase(I);
         return;
     }
-    Msg("! ERROR: Failed to find R1-constant-def '%s'", *C->cName);
+    Msg("! ERROR: Failed to find R1-constant-def '%s'", C->cName.c_str());
 }
 
 void CResourceManager::ED_UpdateConstant(LPCSTR Name, CConstant* data)
@@ -428,3 +466,4 @@ void CResourceManager::_DeleteConstantList(const SConstantList* L)
     Msg("! ERROR: Failed to find compiled list of r1-constant-defs");
 }
 
+} // namespace xray::render::RENDER_NAMESPACE

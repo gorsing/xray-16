@@ -142,7 +142,7 @@ void CUIMMShniaga::InitShniaga(CUIXml& xml_doc, LPCSTR path)
 
 void CUIMMShniaga::OnDeviceReset() {}
 
-void CUIMMShniaga::CreateList(xr_vector<CUITextWnd*>& lst, CUIXml& xml_doc, LPCSTR path, bool required /*= true*/)
+void CUIMMShniaga::CreateList(xr_vector<CUIStatic*>& lst, CUIXml& xml_doc, LPCSTR path, bool required /*= true*/)
 {
     u32 color;
     CGameFont* pF;
@@ -167,21 +167,14 @@ void CUIMMShniaga::CreateList(xr_vector<CUITextWnd*>& lst, CUIXml& xml_doc, LPCS
     XML_NODE tab_node = xml_doc.NavigateToNode(path, 0);
     xml_doc.SetLocalRoot(tab_node);
 
-    CUITextWnd* st;
-
     for (int i = 0; i < nodes_num; ++i)
     {
-        st = xr_new<CUITextWnd>();
+        auto* st = xr_new<CUIStatic>("Button");
         st->SetWndPos(Fvector2().set(0, 0));
         st->SetWndSize(Fvector2().set(m_view->GetDesiredChildWidth(), button_height));
         st->SetFont(pF);
         st->SetTextComplexMode(false);
         st->SetTextST(xml_doc.ReadAttrib("btn", i, "caption"));
-
-        //		float font_height			= st->GetFont()->GetHeight();
-        //		UI().ClientToScreenScaledHeight(font_height);
-
-        //.		st->SetTextOffset			(0, (button_height-font_height)/2.0f);
         st->SetTextColor(color);
         st->SetTextAlignment(CGameFont::alCenter);
         st->SetVTextAlignment(valCenter);
@@ -196,7 +189,7 @@ void CUIMMShniaga::CreateList(xr_vector<CUITextWnd*>& lst, CUIXml& xml_doc, LPCS
 void CUIMMShniaga::SetPage(enum_page_id page_id, LPCSTR xml_file, LPCSTR xml_path)
 {
     VERIFY(m_page != page_id);
-    xr_vector<CUITextWnd*>* lst = NULL;
+    xr_vector<CUIStatic*>* lst = nullptr;
     switch (page_id)
     {
     case epi_main:             lst = &m_buttons;             break;
@@ -397,35 +390,44 @@ void CUIMMShniaga::OnBtnClick()
 
 bool CUIMMShniaga::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 {
-    int action = GetBindedAction(dik);
+    if (CUIWindow::OnKeyboardAction(dik, keyboard_action))
+        return true;
+
+    EGameActions action;
+    if (IsBinded(kQUIT, dik))
+        action = kUI_BACK;
+    else
+        action = GetBindedAction(dik, EKeyContext::UI);
 
     // Check here only for key press to fix too fast clicks
     if (WINDOW_KEY_PRESSED == keyboard_action)
     {
         switch (action)
         {
-        case kENTER:
-        case kJUMP:
-        case kUSE:
-            if (WINDOW_KEY_HOLD == keyboard_action)
-                return false;
+        case kUI_ACCEPT:
             OnBtnClick();
             return true;
 
-        case kQUIT:
+        case kUI_BACK:
             if (m_page != epi_main)
+            {
                 ShowMain();
+                return true;
+            }
+            break;
+        case kUI_MOVE_UP:
+        case kUI_MOVE_DOWN:
+            // CInput sends both 'key hold' and 'key press' during one frame for keyboard (not gamepad)
+            // Prevent double scroll for keyboard
+            // Prevent focus system triggering for gamepad
             return true;
         } // switch (GetBindedAction(dik))
     }
-    // CInput sends both 'key hold' and 'key press' during one frame, no need to check WINDOW_KEY_PRESSED here
     else if (WINDOW_KEY_HOLD == keyboard_action)
     {
-    try_again:
         switch (action)
         {
-        case kUP:
-        case kFWD:
+        case kUI_MOVE_UP:
             if (WINDOW_KEY_HOLD == keyboard_action && !m_flags.test(fl_MovingStoped))
                 return true;
 
@@ -435,8 +437,7 @@ bool CUIMMShniaga::OnKeyboardAction(int dik, EUIMessages keyboard_action)
                 SelectBtn(BtnCount() - 1);
             return true;
 
-        case kDOWN:
-        case kBACK:
+        case kUI_MOVE_DOWN:
             if (WINDOW_KEY_HOLD == keyboard_action && !m_flags.test(fl_MovingStoped))
                 return true;
 
@@ -445,37 +446,22 @@ bool CUIMMShniaga::OnKeyboardAction(int dik, EUIMessages keyboard_action)
             else
                 SelectBtn(0);
             return true;
-
-        case kLEFT:
-        case kRIGHT:
-            break;
-
-        default:
-        {
-            switch (dik)
-            {
-            case XR_CONTROLLER_BUTTON_DPAD_UP:    action = kUP;    goto try_again;
-            case XR_CONTROLLER_BUTTON_DPAD_DOWN:  action = kDOWN;  goto try_again;
-            case XR_CONTROLLER_BUTTON_DPAD_LEFT:  action = kLEFT;  goto try_again;
-            case XR_CONTROLLER_BUTTON_DPAD_RIGHT: action = kRIGHT; goto try_again;
-            }
-        }
         } // switch (GetBindedAction(dik))
     }
 
-    return CUIWindow::OnKeyboardAction(dik, keyboard_action);
+    return false;
 }
 
-bool CUIMMShniaga::OnControllerAction(int axis, float x, float y, EUIMessages controller_action)
+bool CUIMMShniaga::OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action)
 {
     if (WINDOW_KEY_PRESSED == controller_action || WINDOW_KEY_HOLD == controller_action)
     {
-        if (IsBinded(kMOVE_AROUND, axis) && !fis_zero(y))
+        if (IsBinded(kUI_MOVE, axis, EKeyContext::UI) && !fis_zero(state.y))
         {
             if (!m_flags.test(fl_MovingStoped))
                 return true;
 
-            if (y < 0) // scroll up
+            if (state.y < 0) // scroll up
             {
                 if (m_selected_btn > 0)
                     SelectBtn(m_selected_btn - 1);
@@ -492,7 +478,7 @@ bool CUIMMShniaga::OnControllerAction(int axis, float x, float y, EUIMessages co
             return true;
         }
     }
-    return CUIWindow::OnControllerAction(axis, x, y, controller_action);
+    return CUIWindow::OnControllerAction(axis, state, controller_action);
 }
 
 int CUIMMShniaga::BtnCount()

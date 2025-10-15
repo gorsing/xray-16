@@ -9,8 +9,7 @@ template <class T> struct _rect;
 using Irect = _rect<int>;
 template <class T> struct _vector2;
 using Fvector2 = _vector2<float>;
-template <class T> struct _matrix;
-using Fmatrix = _matrix<float>;
+struct Fmatrix;
 
 class IUIRender
 {
@@ -59,7 +58,6 @@ public:
     //.	virtual void StartLineList(u32 iMaxVerts) = 0;
     //.	virtual void FlushLineList() = 0;
     virtual void SetScissor(Irect* rect = nullptr) = 0;
-    virtual void GetActiveTextureResolution(Fvector2& res) = 0;
 
     //.	virtual void PushPoint(float x, float y, u32 c, float u, float v) = 0;
     //.	virtual void PushPoint(int x, int y, u32 c, float u, float v) = 0;

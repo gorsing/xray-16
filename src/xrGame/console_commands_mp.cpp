@@ -168,7 +168,15 @@ public:
     virtual void Execute(LPCSTR args)
     {
         if (IsGameTypeSingle())
+        {
+#ifndef MASTER_GOLD
+            IGameObject* l_pObj = Level().CurrentControlEntity();
+            CEntity* l_pPlayer = smart_cast<CEntity*>(l_pObj);
+            if (l_pPlayer)
+                l_pPlayer->KillEntity(l_pPlayer->ID());
+#endif
             return;
+        }
         if (!g_pGameLevel)
             return;
         if (Game().local_player && Game().local_player->testFlag(GAME_PLAYER_FLAG_VERY_VERY_DEAD))
@@ -247,7 +255,7 @@ public:
                 IGameObject* pObj = Level().Objects.net_Find(CObjID[CO]);
                 char color = (pObj->ID() == pEntity->ID) ? '-' : '!';
 
-                Msg("%c %4d: Client - %20s[%5d] <===> Server - %s [%d]", color, CO + 1, *(pObj->cNameSect()), pObj->ID(),
+                Msg("%c %4d: Client - %20s[%5d] <===> Server - %s [%d]", color, CO + 1, pObj->cNameSect().c_str(), pObj->ID(),
                     pEntity->s_name.c_str(), pEntity->ID);
             }
             else
@@ -255,7 +263,7 @@ public:
                 if (CO < CLObjNum)
                 {
                     IGameObject* pObj = Level().Objects.net_Find(CObjID[CO]);
-                    Msg("! %2d: Client - %s [%d] <===> Server - -----------------", CO + 1, *(pObj->cNameSect()),
+                    Msg("! %2d: Client - %s [%d] <===> Server - -----------------", CO + 1, pObj->cNameSect().c_str(),
                         pObj->ID());
                 }
                 else
@@ -590,12 +598,10 @@ protected:
     shared_str m_action_param;
     bool ParseControlString(LPCSTR args_string)
     {
-        string16 action_name;
-        action_name[0] = 0;
-        string32 param_name;
-        param_name[0] = 0;
+        string32 action_name{};
+        string64 param_name{};
 
-        sscanf(args_string, "%16s %32s", action_name, param_name);
+        sscanf(args_string, "%31s %63s", action_name, param_name); // 31/63 instead of 32/64 because we reserve space for null character
         m_action_param = param_name;
 
         if (!xr_strcmp(action_name, "roundstart"))
@@ -1681,15 +1687,13 @@ public:
     CCC_StartTimeEnvironment(LPCSTR N) : IConsole_Command(N){};
     virtual void Execute(LPCSTR args)
     {
-        u32 hours = 0, mins = 0;
-
-        sscanf(args, "%d:%d", &hours, &mins);
-        u64 NewTime = generate_time(1, 1, 1, hours, mins, 0, 0);
-
-        if (!g_pGameLevel)
+        u32 hours = 0, mins = 0, seconds = 0;
+        if (sscanf(args, "%d:%d:%d", &hours, &mins, &seconds) < 2)
             return;
 
-        if (!Level().Server)
+        u64 NewTime = generate_time(1, 1, 1, hours, mins, seconds, 0);
+
+        if (!OnServer() && IsGameTypeSingle())
             return;
 
         if (!Level().Server->GetGameState())
@@ -1717,7 +1721,7 @@ public:
         }
 
 #ifdef MASTER_GOLD
-        if (!OnServer())
+        if (!OnServer() || IsGameTypeSingle())
             return;
         constexpr bool forced = false;
 #else
@@ -2046,6 +2050,8 @@ public:
 
 void register_mp_console_commands()
 {
+    ZoneScoped;
+
     CMD1(CCC_Restart, "g_restart");
     CMD1(CCC_RestartFast, "g_restart_fast");
     CMD1(CCC_Kill, "g_kill");

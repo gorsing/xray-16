@@ -6,9 +6,9 @@ namespace LevelGraph
 {
 class CLevelGraphManager
 {
-    bool m_compatibility_mode{};
     CLevelVertex* m_nodes; // nodes array
     size_t m_vertex_count;
+    bool m_compatibility_mode{};
 
 private:
     template <typename OldNodes>
@@ -26,7 +26,7 @@ private:
 
         // Mark end node
         // so we can spot that in debugger, if we need
-        NodeCompressed& endNode = nodes[vertex_count + 1];
+        NodeCompressed& endNode = nodes[vertex_count];
         endNode.data[0]  = 'A';
         endNode.data[1]  = 'I';
         endNode.data[2]  = version;
@@ -53,7 +53,7 @@ public:
         {
         case XRAI_CURRENT_VERSION:
             static_assert(XRAI_CURRENT_VERSION == XRAI_VERSION_SKYLOADER,
-                "If you have changed the xrAI version, don't forget to add back compatibility older versions.");
+                "If you have changed the xrAI version, don't forget to add backward compatibility with older versions.");
             m_nodes = static_cast<CLevelVertex*>(stream->pointer());
             break;
 
@@ -87,7 +87,7 @@ public:
             xr_free(m_nodes);
         }
     }
-    
+
     [[nodiscard]] CLevelVertex* begin() { return m_nodes; }
     [[nodiscard]] CLevelVertex* end() { return m_nodes + m_vertex_count; }
 };

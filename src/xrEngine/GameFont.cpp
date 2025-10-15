@@ -4,9 +4,8 @@
 #include "GameFont.h"
 #include "xr_level_controller.h"
 #include "xrCore/Text/StringConversion.hpp"
-#ifndef _EDITOR
 #include "Render.h"
-#endif
+#include "StringTable/StringTable.h"
 
 extern ENGINE_API bool g_bRendering;
 ENGINE_API Fvector2 g_current_font_scale = {1.0f, 1.0f};
@@ -14,15 +13,13 @@ ENGINE_API Fvector2 g_current_font_scale = {1.0f, 1.0f};
 #include "Include/xrRender/RenderFactory.h"
 #include "Include/xrRender/FontRender.h"
 
-CGameFont::CGameFont(pcstr section, u32 flags)
+CGameFont::CGameFont(pcstr section, u8 flags)
 {
     pFontRender = GEnv.RenderFactory->CreateFontRender();
     fCurrentHeight = 0.0f;
     fXStep = 0.0f;
     fYStep = 0.0f;
     uFlags = flags;
-    nNumChars = 0x100;
-    TCMap = NULL;
     Initialize(pSettings->r_string(section, "shader"), pSettings->r_string(section, "texture"));
     if (pSettings->line_exist(section, "size"))
     {
@@ -36,15 +33,13 @@ CGameFont::CGameFont(pcstr section, u32 flags)
         SetInterval(pSettings->r_fvector2(section, "interval"));
 }
 
-CGameFont::CGameFont(pcstr shader, pcstr texture, u32 flags)
+CGameFont::CGameFont(pcstr shader, pcstr texture, u8 flags)
 {
     pFontRender = GEnv.RenderFactory->CreateFontRender();
     fCurrentHeight = 0.0f;
     fXStep = 0.0f;
     fYStep = 0.0f;
     uFlags = flags;
-    nNumChars = 0x100;
-    TCMap = NULL;
     Initialize(shader, texture);
 }
 
@@ -52,11 +47,11 @@ void CGameFont::Initialize(pcstr cShader, pcstr cTextureName)
 {
     string_path cTexture;
 
-    pcstr _lang = pSettings->r_string("string_table", "font_prefix");
+    pcstr _lang = StringTable().GetCurrentFontPrefix().c_str();
     bool is_di = strstr(cTextureName, "ui_font_hud_01") || strstr(cTextureName, "ui_font_hud_02") ||
         strstr(cTextureName, "ui_font_console_02");
     if (_lang && !is_di)
-        strconcat(sizeof(cTexture), cTexture, cTextureName, _lang);
+        strconcat(cTexture, cTextureName, _lang);
     else
         xr_strcpy(cTexture, sizeof(cTexture), cTextureName);
 
@@ -185,13 +180,11 @@ CGameFont::~CGameFont()
 
 static inline float DI2PX(float x)
 {
-    auto& cmd_list = GEnv.Render->get_imm_command_list();
-    return float(iFloor((x + 1) * float(GEnv.Render->getTarget()->get_width(cmd_list)) * 0.5f));
+    return float(iFloor((x + 1) * float(Device.dwWidth) * 0.5f));
 }
 static inline float DI2PY(float y)
 {
-    auto& cmd_list = GEnv.Render->get_imm_command_list();
-    return float(iFloor((y + 1) * float(GEnv.Render->getTarget()->get_height(cmd_list)) * 0.5f));
+    return float(iFloor((y + 1) * float(Device.dwHeight) * 0.5f));
 }
 
 void CGameFont::OutSet(float x, float y)

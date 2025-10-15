@@ -1,6 +1,4 @@
-//---------------------------------------------------------------------------
-#ifndef ParticleEffectDefH
-#define ParticleEffectDefH
+#pragma once
 
 #include "Shader.h"
 
@@ -14,6 +12,8 @@ using PAVec = xr_vector<ParticleAction*>;
 }
 struct EParticleAction;
 
+namespace xray::render::RENDER_NAMESPACE
+{
 namespace PS
 {
 class CParticleEffect;
@@ -93,13 +93,13 @@ public:
     BOOL LoadActionList(IReader& F);
     // execute
     void ExecuteAnimate(PAPI::Particle* particles, u32 p_cnt, float dt);
-    void ExecuteCollision(PAPI::Particle* particles, u32 p_cnt, float dt, CParticleEffect* owner, CollisionCallback cb);
+    void ExecuteCollision(PAPI::Particle* particles, u32 p_cnt, float dt, CParticleEffect* owner, CollisionCallback cb) const;
 
     CPEDef();
     ~CPEDef();
 
     void SetName(LPCSTR name);
-    LPCSTR Name() const { return *m_Name; }
+    pcstr Name() const { return m_Name.c_str(); }
     void CreateShader();
     void DestroyShader();
 
@@ -158,4 +158,4 @@ public:
 #define PED_CHUNK_EDATA 0x0024
 #define PED_CHUNK_ALIGN_TO_PATH 0x0025
 //---------------------------------------------------------------------------
-#endif
+} // namespace xray::render::RENDER_NAMESPACE

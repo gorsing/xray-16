@@ -7,27 +7,14 @@
 #include <DirectXMath.h>
 #include <DirectXPackedVector.h>
 
+namespace xray::render::RENDER_NAMESPACE
+{
 using namespace DirectX;
 
 struct VsInput
 {
     Fvector pos;
 };
-
-namespace
-{
-// For render call
-shared_str strZNear("ZNear");
-shared_str strZFar("ZFar");
-shared_str strGridScaleFactor("gridScaleFactor");
-shared_str strEyeOnGrid("eyeOnGrid");
-shared_str strWorldViewProjection("WorldViewProjection");
-shared_str strInvWorldViewProjection("InvWorldViewProjection");
-shared_str strRTWidth("RTWidth");
-shared_str strRTHeight("RTHeight");
-
-shared_str strDiffuseLight("DiffuseLight");
-}
 
 LPCSTR dx113DFluidRenderer::m_pRTNames[RRT_NumRT] = {
     "$user$rayDataTex", "$user$rayDataTexSmall", "$user$rayCastTex", "$user$edgeTex"};
@@ -317,6 +304,8 @@ void dx113DFluidRenderer::CreateRayDataResources(int width, int height)
 
 void dx113DFluidRenderer::Draw(const dx113DFluidData& FluidData)
 {
+    static shared_str strDiffuseLight("DiffuseLight");
+
     //	We don't need ZB anyway
     RCache.set_ZB(nullptr);
 
@@ -469,7 +458,7 @@ void dx113DFluidRenderer::CalculateLighting(const dx113DFluidData& FluidData, Fo
     box.getradius(size);
 
     // Traverse object database
-    g_SpatialSpace->q_box(m_lstRenderables,
+    g_pGamePersistent->SpatialSpace.q_box(m_lstRenderables,
         0, // ISpatial_DB::O_ORDERED,
         STYPE_LIGHTSOURCE, center, size);
 
@@ -512,6 +501,15 @@ void dx113DFluidRenderer::CalculateLighting(const dx113DFluidData& FluidData, Fo
 
 void dx113DFluidRenderer::PrepareCBuffer(const dx113DFluidData &FluidData, u32 RTWidth, u32 RTHeight)
 {
+    static shared_str strZNear("ZNear");
+    static shared_str strZFar("ZFar");
+    static shared_str strGridScaleFactor("gridScaleFactor");
+    static shared_str strEyeOnGrid("eyeOnGrid");
+    static shared_str strWorldViewProjection("WorldViewProjection");
+    static shared_str strInvWorldViewProjection("InvWorldViewProjection");
+    static shared_str strRTWidth("RTWidth");
+    static shared_str strRTHeight("RTHeight");
+
     const Fmatrix& transform = FluidData.GetTransform();
     RCache.set_xform_world(transform);
 
@@ -529,8 +527,8 @@ void dx113DFluidRenderer::PrepareCBuffer(const dx113DFluidData &FluidData, u32 R
     RCache.set_c(strGridScaleFactor, worldScale);
 
     // We prepend the current world matrix with this other matrix which adds an offset (-0.5, -0.5, -0.5)
-    //  and scale factors to account for unequal number of voxels on different sides of the volume box. 
-    // This is because we want to preserve the aspect ratio of the original simulation grid when 
+    //  and scale factors to account for unequal number of voxels on different sides of the volume box.
+    // This is because we want to preserve the aspect ratio of the original simulation grid when
     //  raytracing through it.
     const XMMATRIX gridMatrix = XMLoadFloat4x4(reinterpret_cast<XMFLOAT4X4*>(&m_gridMatrix));
     WorldView = gridMatrix * WorldView;
@@ -553,7 +551,7 @@ void dx113DFluidRenderer::PrepareCBuffer(const dx113DFluidData &FluidData, u32 R
     }
 
     {
-        // Compute the inverse of the worldView matrix 
+        // Compute the inverse of the worldView matrix
         const XMMATRIX WorldViewInv = XMMatrixInverse(nullptr, WorldView);
 
         // Compute the eye's position in "grid space" (the 0-1 texture coordinate cube)
@@ -566,3 +564,4 @@ void dx113DFluidRenderer::PrepareCBuffer(const dx113DFluidData &FluidData, u32 R
     RCache.set_c(strRTWidth, (float)RTWidth);
     RCache.set_c(strRTHeight, (float)RTHeight);
 }
+} // namespace xray::render::RENDER_NAMESPACE

@@ -19,6 +19,7 @@
 #include "Actor_Flags.h"
 #include "CustomZone.h"
 #include "xrScriptEngine/script_engine.hpp"
+#include "xrScriptEngine/script_profiler.hpp"
 #include "xrScriptEngine/script_process.hpp"
 #include "xrServer_Objects.h"
 #include "ui/UIMainIngameWnd.h"
@@ -45,7 +46,6 @@
 #include "inventory_upgrade_manager.h"
 
 #include "xrGameSpy/GameSpy_Full.h"
-#include "xrGameSpy/GameSpy_Patching.h"
 
 #include "ai_debug_variables.h"
 #include "xrPhysics/console_vars.h"
@@ -76,6 +76,8 @@ ENGINE_API
 extern float psHUD_FOV;
 extern float psSqueezeVelocity;
 extern int psLUA_GCSTEP;
+extern int psLUA_GCTIMEOUT;
+extern u32 ps_lua_gc_method;
 extern int g_auto_ammo_unload;
 
 extern int x_m_x;
@@ -148,6 +150,15 @@ enum E_COMMON_FLAGS
     flAiUseTorchDynamicLights = 1
 };
 
+const xr_token lua_gc_method_token[] =
+{
+    { "gc_disable", 0 },
+    { "gc_step", 1 },
+    { "gc_timeout", 2 },
+    { "gc_full", 3 },
+    { nullptr, -1 }
+};
+
 CUIOptConCom g_OptConCom;
 
 static void full_memory_stats()
@@ -157,11 +168,12 @@ static void full_memory_stats()
     GEnv.Render->ResourcesGetMemoryUsage(m_base, c_base, m_lmaps, c_lmaps);
     log_vminfo();
     size_t _process_heap = ::Memory.mem_usage();
-    int _eco_strings = (int)g_pStringContainer->stat_economy();
+    const auto [_eco_strings_bytes, _eco_strings_count] = g_pStringContainer->stat_economy();
     int _eco_smem = (int)g_pSharedMemoryContainer->stat_economy();
-    Msg("* [ Render ]: textures[%d K]", (m_base + m_lmaps) / 1024);
+    Msg("* [ render ]: textures[%d K]", (m_base + m_lmaps) / 1024);
     Msg("* [ x-ray  ]: process heap[%u K]", _process_heap / 1024);
-    Msg("* [ x-ray  ]: economy: strings[%d K], smem[%d K]", _eco_strings / 1024, _eco_smem);
+    Msg("* [ x-ray  ]: shared strings: memory[%ld K], count[%lu]", _eco_strings_bytes / 1024, _eco_strings_count);
+    Msg("* [ x-ray  ]: shared memory[%ld K]", _eco_smem);
 #ifdef FS_DEBUG
     Msg("* [ x-ray  ]: file mapping: memory[%d K], count[%d]", g_file_mapped_memory / 1024, g_file_mapped_count);
     dump_file_mappings();
@@ -214,8 +226,7 @@ public:
         CCC_Token::Execute(args);
         StringTable().ReloadLanguage();
 
-        if (g_pGamePersistent && g_pGamePersistent->IsMainMenuActive())
-            MainMenu()->OnUIReset();
+        Device.seqUIReset.Process();
 
         if (!g_pGameLevel)
             return;
@@ -539,7 +550,7 @@ class CCC_SpawnToInventory : public IConsole_Command
 {
 public:
     CCC_SpawnToInventory(pcstr name) : IConsole_Command(name) {}
-    
+
     void Execute(pcstr args) override
     {
         if (!g_pGameLevel)
@@ -559,7 +570,7 @@ public:
 
         Level().spawn_item(args, Actor()->Position(), false, Actor()->ID());
     }
-    
+
     void Info(TInfo& I) override
     {
         xr_strcpy(I, "valid name of an item that can be spawned");
@@ -642,7 +653,7 @@ public:
 
         string_path S, S1;
         S[0] = 0;
-        strncpy_s(S, sizeof(S), args, _MAX_PATH - 1);
+        strncpy_s(S, sizeof(S), args, MAX_PATH - 1);
 
 #ifdef DEBUG
         CTimer timer;
@@ -710,7 +721,7 @@ public:
     virtual void Execute(LPCSTR args)
     {
         string_path saved_game;
-        strncpy_s(saved_game, sizeof(saved_game), args, _MAX_PATH - 1);
+        strncpy_s(saved_game, sizeof(saved_game), args, MAX_PATH - 1);
 
         if (!ai().get_alife())
         {
@@ -790,7 +801,7 @@ public:
         string_path saved_game = "";
         if (args)
         {
-            strncpy_s(saved_game, sizeof(saved_game), args, _MAX_PATH - 1);
+            strncpy_s(saved_game, sizeof(saved_game), args, MAX_PATH - 1);
         }
 
         if (*saved_game)
@@ -960,7 +971,7 @@ public:
     }
 };
 
-#if defined(USE_DEBUGGER) && !defined(USE_LUA_STUDIO)
+#if defined(USE_DEBUGGER)
 class CCC_ScriptDbg : public IConsole_Command
 {
 public:
@@ -1002,23 +1013,7 @@ public:
             xr_strcpy(I, "restarts script debugger or start if no script debugger presents");
     }
 };
-#endif // #if defined(USE_DEBUGGER) && !defined(USE_LUA_STUDIO)
-
-#if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
-class CCC_ScriptLuaStudioConnect : public IConsole_Command
-{
-public:
-    CCC_ScriptLuaStudioConnect(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; };
-    virtual void Execute(LPCSTR args) { GEnv.ScriptEngine->try_connect_to_debugger(); };
-};
-
-class CCC_ScriptLuaStudioDisconnect : public IConsole_Command
-{
-public:
-    CCC_ScriptLuaStudioDisconnect(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; };
-    virtual void Execute(LPCSTR args) { GEnv.ScriptEngine->disconnect_from_debugger(); };
-};
-#endif // #if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
+#endif // #if defined(USE_DEBUGGER)
 
 class CCC_DumpInfos : public IConsole_Command
 {
@@ -1080,11 +1075,22 @@ class CCC_DebugFonts : public IConsole_Command
 {
 public:
     CCC_DebugFonts(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = true; }
+
+    ~CCC_DebugFonts()
+    {
+        xr_free(m_ui);
+    }
+
     virtual void Execute(LPCSTR args)
     {
-        // BUG: leak
-        (xr_new<CUIDebugFonts>())->ShowDialog(true);
+        if (!m_ui)
+            m_ui = xr_new<CUIDebugFonts>();
+
+        m_ui->ShowDialog(true);
     }
+
+private:
+    CUIDebugFonts* m_ui;
 };
 
 class CCC_DebugNode : public IConsole_Command
@@ -1374,7 +1380,7 @@ public:
 class CCC_ScriptCommand : public IConsole_Command
 {
 public:
-    CCC_ScriptCommand(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; };
+    CCC_ScriptCommand(LPCSTR N) : IConsole_Command(N) { bEmptyArgsHandled = false; bLowerCaseArgs = false; }
     virtual void Execute(LPCSTR args)
     {
         if (!xr_strlen(args))
@@ -1443,6 +1449,35 @@ public:
 
 #endif // MASTER_GOLD
 
+class CCC_LuaGCMethod : public CCC_Token
+{
+public:
+    CCC_LuaGCMethod(pcstr name) : CCC_Token(name, &ps_lua_gc_method, lua_gc_method_token) {}
+
+    void Execute(pcstr args) override
+    {
+        const auto prev = *value;
+        CCC_Token::Execute(args);
+
+        switch (*value)
+        {
+        case 0:
+            lua_gc(GEnv.ScriptEngine->lua(), LUA_GCSTOP, 0);
+            break;
+        case 1:
+        case 2:
+            if (prev == 0)
+                lua_gc(GEnv.ScriptEngine->lua(), LUA_GCRESTART, 0);
+            break;
+        case 3:
+            // Perform a full garbage collection cycle and return to previous strategy.
+            lua_gc(GEnv.ScriptEngine->lua(), LUA_GCCOLLECT, 0);
+            *value = prev;
+            break;
+        }
+    }
+};
+
 #include "GamePersistent.h"
 
 class CCC_MainMenu : public IConsole_Command
@@ -1479,7 +1514,7 @@ public:
         CCC_Token::Execute(args);
         UIStyles->SetupStyle(m_id);
     }
-    
+
     const xr_token* GetToken() noexcept override // may throw exceptions!
     {
         return UIStyles->GetToken().data();
@@ -1816,20 +1851,7 @@ public:
 
 class CCC_GSCheckForUpdates : public IConsole_Command
 {
-private:
-    CGameSpy_Patching::PatchCheckCallback m_resultCallbackBinded;
-    std::atomic<bool> m_checkInProgress = false;
     bool m_informNoPatch = true;
-
-    void ResultCallback(bool success, pcstr VersionName, pcstr URL)
-    {
-        auto mm = MainMenu();
-        if ((success || m_informNoPatch) && mm != nullptr)
-        {
-            mm->OnPatchCheck(success, VersionName, URL);
-        }
-        m_checkInProgress.store(false);
-    }
 
     void SetupCallParams(pcstr args)
     {
@@ -1845,7 +1867,6 @@ private:
 public:
     CCC_GSCheckForUpdates(LPCSTR N) : IConsole_Command(N)
     {
-        m_resultCallbackBinded.bind(this, &CCC_GSCheckForUpdates::ResultCallback);
         bEmptyArgsHandled = true;
     };
 
@@ -1855,13 +1876,12 @@ public:
         if (mm == nullptr)
             return;
 
-#ifdef XR_PLATFORM_WINDOWS
-        if (!m_checkInProgress.exchange(true))
+        SetupCallParams(arguments);
+
+        if (m_informNoPatch)
         {
-            SetupCallParams(arguments);
-            mm->GetGS()->GetGameSpyPatching()->CheckForPatch(true, m_resultCallbackBinded);
+            mm->OnPatchCheck(false);
         }
-#endif
     }
 };
 
@@ -1923,8 +1943,213 @@ public:
     }
 };
 
+class CCC_UI_Time_Dilation_Mode : public IConsole_Command
+{
+    UITimeDilator::UIMode mode;
+    bool isEnable;
+
+public:
+    CCC_UI_Time_Dilation_Mode(pcstr name, UITimeDilator::UIMode mode) : IConsole_Command(name), mode(mode) {};
+
+    void Execute(pcstr args) override
+    {
+        if (EQ(args, "on") || EQ(args, "1"))
+        {
+            TimeDilator()->SetModeEnability(mode, true);
+            isEnable = true;
+        }
+        else if (EQ(args, "off") || EQ(args, "0"))
+        {
+            TimeDilator()->SetModeEnability(mode, false);
+            isEnable = false;
+        }
+        else
+            InvalidSyntax();
+    }
+
+    void GetStatus(TStatus& status) override
+    {
+        xr_strcpy(status, isEnable ? "on" : "off");
+    }
+
+    void Info(TInfo& info) override
+    {
+        xr_strcpy(info, "'on/off' or '1/0'");
+    }
+
+    void fill_tips(vecTips& tips, u32 /*mode*/) override
+    {
+        TStatus str;
+        xr_sprintf(str, sizeof(str), "%s (current) [on/off]", isEnable ? "on" : "off");
+        tips.push_back(str);
+    }
+};
+
+class CCC_UI_Time_Factor : public IConsole_Command
+{
+    float uiTimeFactor = 1.0;
+
+public:
+    CCC_UI_Time_Factor(pcstr name) : IConsole_Command(name){};
+
+    void Execute(pcstr args) override
+    {
+        float time_factor = (float)atof(args);
+        clamp(time_factor, EPS, 1.f);
+        TimeDilator()->SetUiTimeFactor(time_factor);
+        uiTimeFactor = time_factor;
+    }
+
+    void Info(TInfo& info) override
+    {
+        xr_strcpy(info, "[0.001 - 1.0]");
+    }
+
+    void fill_tips(vecTips& tips, u32 mode) override
+    {
+        TStatus str;
+        xr_sprintf(str, sizeof(str), "%3.3f (current) [0.001 - 1.0]", uiTimeFactor);
+        tips.push_back(str);
+    }
+
+    void GetStatus(TStatus& status) override
+    {
+        xr_sprintf(status, sizeof(status), "%f", uiTimeFactor);
+    }
+};
+
+class CCC_LuaProfiler : public IConsole_Command
+{
+public:
+    constexpr static cpcstr COMMAND_LUA_PROFILER_STATUS = "lua_profiler_status";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_START = "lua_profiler_start";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_START_HOOK_MODE = "lua_profiler_start_hook_mode";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_START_SAMPLING_MODE = "lua_profiler_start_sampling_mode";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_STOP = "lua_profiler_stop";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_RESET = "lua_profiler_reset";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_LOG = "lua_profiler_log";
+    constexpr static cpcstr COMMAND_LUA_PROFILER_SAVE = "lua_profiler_save";
+
+    CCC_LuaProfiler(pcstr name) : IConsole_Command(name) { bEmptyArgsHandled = true; }
+
+    void Execute(pcstr args) override
+    {
+        CScriptProfiler* profiler = GEnv.ScriptEngine->m_profiler;
+
+        if (strstr(cName, COMMAND_LUA_PROFILER_STATUS) == cName)
+        {
+            Msg("[P] Profiler status: %s, type - %s", profiler->IsActive() ? "on" : "off",
+                profiler->GetTypeString().c_str());
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START_HOOK_MODE) == cName)
+        {
+            profiler->StartHookMode();
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START_SAMPLING_MODE) == cName)
+        {
+            u32 interval = atoi(args);
+
+            profiler->StartSamplingMode(interval ? interval : CScriptProfiler::PROFILE_SAMPLING_INTERVAL_DEFAULT);
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START) == cName)
+        {
+            u32 profiler_type = atoi(args);
+
+            profiler->Start(profiler_type ? (CScriptProfilerType)profiler_type : CScriptProfiler::PROFILE_TYPE_DEFAULT);
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_STOP) == cName)
+        {
+            profiler->Stop();
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_RESET) == cName)
+        {
+            profiler->Reset();
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_LOG) == cName)
+        {
+            u32 limit = atoi(args);
+
+            profiler->LogReport(limit ? limit : CScriptProfiler::PROFILE_ENTRIES_LOG_LIMIT_DEFAULT);
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_SAVE) == cName)
+        {
+            profiler->SaveReport();
+        }
+    }
+
+    void fill_tips(vecTips& tips, u32 /*mode*/) override
+    {
+        TStatus status_buffer;
+
+        if (strstr(cName, COMMAND_LUA_PROFILER_STATUS) == cName)
+        {
+            // No arguments.
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START_HOOK_MODE) == cName)
+        {
+            // No arguments.
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START_SAMPLING_MODE) == cName)
+        {
+            xr_sprintf(status_buffer, "%d (default) [1-%d] - sampling interval",
+                CScriptProfiler::PROFILE_SAMPLING_INTERVAL_DEFAULT, CScriptProfiler::PROFILE_SAMPLING_INTERVAL_MAX);
+            tips.emplace_back(status_buffer);
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START) == cName)
+        {
+            xr_sprintf(status_buffer, "%d - hooks based profiler", CScriptProfilerType::Hook);
+            tips.emplace_back(status_buffer);
+
+            xr_sprintf(status_buffer, "%d - sampling based profiler", CScriptProfilerType::Sampling);
+            tips.emplace_back(status_buffer);
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_STOP) == cName)
+        {
+            // No arguments.
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_RESET) == cName)
+        {
+            // No arguments.
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_LOG) == cName)
+        {
+            xr_sprintf(status_buffer, "%d (default) - count of profiling entries to print",
+                CScriptProfiler::PROFILE_ENTRIES_LOG_LIMIT_DEFAULT, CScriptProfiler::PROFILE_SAMPLING_INTERVAL_MAX);
+            tips.emplace_back(status_buffer);
+        }
+        else if (strstr(cName, COMMAND_LUA_PROFILER_SAVE) == cName)
+        {
+            // No arguments.
+        }
+    }
+
+    void Info(TInfo& info) override
+    {
+        if (strstr(cName, COMMAND_LUA_PROFILER_STATUS) == cName)
+            xr_strcpy(info, "no arguments : print lua profiler status");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START_HOOK_MODE) == cName)
+            xr_strcpy(info, "no arguments : start lua script profiling in hook mode");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START_SAMPLING_MODE) == cName)
+            xr_strcpy(info,
+                "integer value in range [1,1000] : start lua script profiling in sampling mode with provided sampling "
+                "interval");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_START) == cName)
+            xr_strcpy(info, "integer value in range [0,2] : start lua script profiling in provided mode");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_STOP) == cName)
+            xr_strcpy(info, "no arguments : stop lua script profiling");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_RESET) == cName)
+            xr_strcpy(info, "no arguments : reset lua script profiling stats");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_LOG) == cName)
+            xr_strcpy(info, "integer value : log lua script profiling stats, limit entries with argument");
+        else if (strstr(cName, COMMAND_LUA_PROFILER_SAVE) == cName)
+            xr_strcpy(info, "no arguments : save lua script profiling stats in a file");
+    }
+};
+
 void CCC_RegisterCommands()
 {
+    ZoneScoped;
+
     // options
     g_OptConCom.Init();
 
@@ -1934,6 +2159,7 @@ void CCC_RegisterCommands()
     CMD3(CCC_Mask, "g_crouch_toggle", &psActorFlags, AF_CROUCH_TOGGLE);
     CMD1(CCC_GameDifficulty, "g_game_difficulty");
     CMD1(CCC_GameLanguage, "g_language");
+    CMD3(CCC_String, "g_language_ltx", CStringTable::LanguageIDInLTX, std::size(CStringTable::LanguageIDInLTX));
 
     CMD3(CCC_Mask, "g_backrun", &psActorFlags, AF_RUN_BACKWARD);
 
@@ -2002,11 +2228,25 @@ void CCC_RegisterCommands()
     CMD3(CCC_Mask, "ai_use_smart_covers", &psAI_Flags, aiUseSmartCovers);
     CMD3(CCC_Mask, "ai_use_smart_covers_animation_slots", &psAI_Flags, (u32)aiUseSmartCoversAnimationSlot);
     CMD4(CCC_Float, "ai_smart_factor", &g_smart_cover_factor, 0.f, 1000000.f);
-    CMD3(CCC_Mask, "lua_debug", &g_LuaDebug, 1);
 #endif // MASTER_GOLD
 
-#ifdef DEBUG
+    CMD3(CCC_Mask, "lua_debug", &g_LuaDebug, 1);
+    CMD4(CCC_Integer, "lua_dump_depth", &g_LuaDumpDepth, 0, 16);
+
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_STATUS);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_START);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_START_SAMPLING_MODE);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_START_HOOK_MODE);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_STOP);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_RESET);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_LOG);
+    CMD1(CCC_LuaProfiler, CCC_LuaProfiler::COMMAND_LUA_PROFILER_SAVE);
+
+    CMD1(CCC_LuaGCMethod, "lua_gc_method");
     CMD4(CCC_Integer, "lua_gcstep", &psLUA_GCSTEP, 1, 1000);
+    CMD4(CCC_Integer, "lua_gc_timeout", &psLUA_GCTIMEOUT, 1000, 16000);
+
+#ifdef DEBUG
     CMD3(CCC_Mask, "ai_debug", &psAI_Flags, aiDebug);
     CMD3(CCC_Mask, "ai_dbg_brain", &psAI_Flags, aiBrain);
     CMD3(CCC_Mask, "ai_dbg_motion", &psAI_Flags, aiMotion);
@@ -2066,16 +2306,11 @@ void CCC_RegisterCommands()
     CMD4(CCC_Integer, "ai_dbg_inactive_time", &g_AI_inactive_time, 0, 1000000);
 
     CMD1(CCC_DebugNode, "ai_dbg_node");
-#if defined(USE_DEBUGGER) && !defined(USE_LUA_STUDIO)
+#if defined(USE_DEBUGGER)
     CMD1(CCC_ScriptDbg, "script_debug_break");
     CMD1(CCC_ScriptDbg, "script_debug_stop");
     CMD1(CCC_ScriptDbg, "script_debug_restart");
-#endif // #if defined(USE_DEBUGGER) && !defined(USE_LUA_STUDIO)
-
-#if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
-    CMD1(CCC_ScriptLuaStudioConnect, "lua_studio_connect");
-    CMD1(CCC_ScriptLuaStudioDisconnect, "lua_studio_disconnect");
-#endif // #if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
+#endif // #if defined(USE_DEBUGGER)
 
     CMD1(CCC_ShowMonsterInfo, "ai_monster_info");
     CMD1(CCC_DebugFonts, "debug_fonts");
@@ -2118,12 +2353,21 @@ void CCC_RegisterCommands()
     CMD3(CCC_Mask, "g_important_save", &psActorFlags, AF_IMPORTANT_SAVE);
     CMD3(CCC_Mask, "g_loading_stages", &psActorFlags, AF_LOADING_STAGES);
     CMD3(CCC_Mask, "g_always_use_attitude_sensors", &psActorFlags, AF_ALWAYS_USE_ATTITUDE_SENSORS);
+    CMD3(CCC_Mask, "g_use_tracers", &psActorFlags, AF_USE_TRACERS);
 
     CMD4(CCC_Integer, "g_inv_highlight_equipped", &g_inv_highlight_equipped, 0, 1);
     CMD4(CCC_Integer, "g_first_person_death", &g_first_person_death, 0, 1);
     CMD4(CCC_Integer, "g_unload_ammo_after_pick_up", &g_auto_ammo_unload, 0, 1);
     CMD4(CCC_Integer, "g_normalize_mouse_sens", &g_normalize_mouse_sens, 0, 1);
     CMD4(CCC_Integer, "g_normalize_upgrade_mouse_sens", &g_normalize_upgrade_mouse_sens, 0, 1);
+
+    CMD4(CCC_Float, "g_look_intensity_min", &psLookIntensityMin, 10.f, 100.f);
+    CMD4(CCC_Float, "g_look_intensity_max", &psLookIntensityMax, 10.f, 100.f);
+    CMD4(CCC_Float, "g_look_intensity_step", &psLookIntensityStep, 0.f, 10.f);
+
+    CMD4(CCC_Float, "g_cursor_intensity_min", &psCursorIntensityMin, 1.f, 100.f);
+    CMD4(CCC_Float, "g_cursor_intensity_max", &psCursorIntensityMax, 1.f, 100.f);
+    CMD4(CCC_Float, "g_cursor_intensity_step", &psCursorIntensityStep, 0.f, 10.f);
 
     CMD1(CCC_CleanupTasks, "dbg_cleanup_tasks");
 
@@ -2272,8 +2516,6 @@ void CCC_RegisterCommands()
 #endif
 
 #ifdef DEBUG
-    CMD4(CCC_Integer, "string_table_error_msg", &CStringTable::m_bWriteErrorsToLog, 0, 1);
-
     CMD1(CCC_DumpInfos, "dump_infos");
     CMD1(CCC_DumpTasks, "dump_tasks");
     CMD1(CCC_DumpMap, "dump_map");
@@ -2378,9 +2620,10 @@ void CCC_RegisterCommands()
     CMD3(CCC_String, "slot_2", g_quick_use_slots[2], 32);
     CMD3(CCC_String, "slot_3", g_quick_use_slots[3], 32);
 
-    extern int g_dbg_load_pre_c5ef6c7_saves;
-    CMD4(CCC_Integer, "dbg_load_pre_c5ef6c7_saves", &g_dbg_load_pre_c5ef6c7_saves, 0, 1); //Alundaio
-
     CMD4(CCC_Integer, "keypress_on_start", &g_keypress_on_start, 0, 1);
+    CMD1(CCC_UI_Time_Factor, "ui_time_factor");
+    CMD2(CCC_UI_Time_Dilation_Mode, "time_dilation_inventory", UITimeDilator::Inventory);
+    CMD2(CCC_UI_Time_Dilation_Mode, "time_dilation_pda", UITimeDilator::Pda);
+
     register_mp_console_commands();
 }

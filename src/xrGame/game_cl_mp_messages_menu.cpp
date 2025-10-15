@@ -23,11 +23,11 @@ void game_cl_mp::AddMessageMenu(LPCSTR menu_section, LPCSTR snd_path, LPCSTR tea
     {
         shared_str LineName;
         LineName.printf("phrase_%d", i);
-        if (!pSettings->line_exist(menu_section, *LineName))
+        if (!pSettings->line_exist(menu_section, LineName.c_str()))
             break;
         //---------------------------------------------------------
         string4096 Line;
-        xr_strcpy(Line, pSettings->r_string(menu_section, *LineName));
+        xr_strcpy(Line, pSettings->r_string(menu_section, LineName.c_str()));
         u32 count = _GetItemCount(Line);
         if (!count)
             continue;
@@ -90,10 +90,10 @@ void game_cl_mp::LoadMessagesMenu(LPCSTR menus_section)
     {
         shared_str LineName;
         LineName.printf("menu_%d", i);
-        if (!pSettings->line_exist(menus_section, *LineName))
+        if (!pSettings->line_exist(menus_section, LineName.c_str()))
             break;
-        shared_str menu_section = pSettings->r_string(menus_section, *LineName);
-        AddMessageMenu(*menu_section, *Sounds_Path, *Team_Prefix);
+        shared_str menu_section = pSettings->r_string(menus_section, LineName.c_str());
+        AddMessageMenu(menu_section.c_str(), Sounds_Path.c_str(), Team_Prefix.c_str());
     }
 };
 
@@ -174,16 +174,17 @@ void game_cl_mp::OnSpeechMessage(NET_Packet& P)
     if (ps->team == local_player->team)
     {
         if (CurrentGameUI())
+        {
             CurrentGameUI()->m_pMessagesWnd->AddChatMessage(
-                StringTable().translate(pMMessage->pMessage.c_str()).c_str(), ps->getName());
-
+                StringTable().translate(pMMessage->pMessage), ps->getName());
+        }
         if (!Level().MapManager().HasMapLocation(FRIEND_RADION_LOCATION, ps->GameID))
         {
             (Level().MapManager().AddMapLocation(FRIEND_RADION_LOCATION, ps->GameID))->EnablePointer();
         }
     }
 
-    u8 VariantID = P.r_u8();
+    const u8 VariantID = P.r_u8();
     if (pMMessage->aVariants.empty())
         return;
     if (VariantID && VariantID >= pMMessage->aVariants.size())
@@ -195,13 +196,13 @@ void game_cl_mp::OnSpeechMessage(NET_Packet& P)
     {
         if (ps == local_player)
         {
-            pMSound->mSound_Voice.play_at_pos(NULL, Fvector().set(0, 0, 0), sm_2D, 0);
+            pMSound->mSound_Voice.play_at_pos(nullptr, Fvector().set(0, 0, 0), sm_2D, 0);
         }
         else
         {
-            pMSound->mSound_Radio.play_at_pos(NULL, Fvector().set(0, 0, 0), sm_2D, 0);
+            pMSound->mSound_Radio.play_at_pos(nullptr, Fvector().set(0, 0, 0), sm_2D, 0);
         }
-        Msg("%s said: %s", ps->getName(), *StringTable().translate(pMMessage->pMessage));
+        Msg("%s said: %s", ps->getName(), StringTable().translate(pMMessage->pMessage).c_str());
     }
     else
     {

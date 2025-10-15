@@ -4,6 +4,8 @@
 
 class light;
 
+namespace xray::render::RENDER_NAMESPACE
+{
 //#define DU_SPHERE_NUMVERTEX 92
 //#define DU_SPHERE_NUMFACES	180
 //#define DU_CONE_NUMVERTEX	18
@@ -11,7 +13,7 @@ class light;
 //	no less than 2
 #define VOLUMETRIC_SLICES 100
 
-class CRenderTarget : public IRender_Target
+class CRenderTarget
 {
     u32 dwWidth[R__NUM_CONTEXTS];
     u32 dwHeight[R__NUM_CONTEXTS];
@@ -77,9 +79,6 @@ public:
     ref_rt rt_smap_rain;
     ref_rt rt_smap_depth_minmax; //	is used for min/max sm
 
-    //	Igor: for async screenshots
-    GLuint t_ss_async; // 32bit		(r,g,b,a) is situated in the system memory
-
     // Textures
     GLuint t_material_surf;
     ref_texture t_material;
@@ -90,6 +89,10 @@ public:
     ref_texture t_noise_mipped;
 
     ref_texture t_base;
+
+    // Anomaly
+    ref_rt rt_Generic_temp;
+
 private:
     // OCCq
     ref_shader s_occq;
@@ -207,7 +210,7 @@ private:
 
 public:
     CRenderTarget();
-    ~CRenderTarget() override;
+    ~CRenderTarget();
 
     void build_textures();
 
@@ -296,22 +299,22 @@ public:
     void phase_flip();
 #endif
 
-    u32 get_width(CBackend& cmd_list) override { return dwWidth[cmd_list.context_id]; }
-    u32 get_height(CBackend& cmd_list) override { return dwHeight[cmd_list.context_id]; }
+    u32 get_width(CBackend& cmd_list) { return dwWidth[cmd_list.context_id]; }
+    u32 get_height(CBackend& cmd_list) { return dwHeight[cmd_list.context_id]; }
 
-    void set_blur(float f) override { param_blur = f; }
-    void set_gray(float f) override { param_gray = f; }
-    void set_duality_h(float f) override { param_duality_h = _abs(f); }
-    void set_duality_v(float f) override { param_duality_v = _abs(f); }
-    void set_noise(float f) override { param_noise = f; }
-    void set_noise_scale(float f) override { param_noise_scale = f; }
-    void set_noise_fps(float f) override { param_noise_fps = _abs(f) + EPS_S; }
-    void set_color_base(u32 f) override { param_color_base = f; }
-    void set_color_gray(u32 f) override { param_color_gray = f; }
-    void set_color_add(const Fvector& f) override { param_color_add = f; }
-    void set_cm_imfluence(float f) override { param_color_map_influence = f; }
-    void set_cm_interpolate(float f) override { param_color_map_interpolate = f; }
-    void set_cm_textures(const shared_str& tex0, const shared_str& tex1) override
+    void set_blur(float f) { param_blur = f; }
+    void set_gray(float f) { param_gray = f; }
+    void set_duality_h(float f) { param_duality_h = _abs(f); }
+    void set_duality_v(float f) { param_duality_v = _abs(f); }
+    void set_noise(float f) { param_noise = f; }
+    void set_noise_scale(float f) { param_noise_scale = f; }
+    void set_noise_fps(float f) { param_noise_fps = _abs(f) + EPS_S; }
+    void set_color_base(u32 f) { param_color_base = f; }
+    void set_color_gray(u32 f) { param_color_gray = f; }
+    void set_color_add(const Fvector& f) { param_color_add = f; }
+    void set_cm_imfluence(float f) { param_color_map_influence = f; }
+    void set_cm_interpolate(float f) { param_color_map_interpolate = f; }
+    void set_cm_textures(const shared_str& tex0, const shared_str& tex1)
     {
         color_map_manager.SetTextures(tex0, tex1);
     }
@@ -320,8 +323,6 @@ public:
     //	Don't clear when render for the first time
     void reset_light_marker(CBackend& cmd_list, bool bResetStencil = false);
     void increment_light_marker(CBackend& cmd_list);
-
-    void DoAsyncScreenshot();
 
 #ifdef DEBUG
     void dbg_addline(const Fvector& P0, const Fvector& P1, u32 c)
@@ -372,3 +373,4 @@ public:
     void dbg_addplane(Fplane& /*P0*/, u32 /*c*/) {}
 #endif
 };
+} // namespace xray::render::RENDER_NAMESPACE

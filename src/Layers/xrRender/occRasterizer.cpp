@@ -5,10 +5,12 @@
 #include "stdafx.h"
 #include "occRasterizer.h"
 
-#ifdef DEBUG 
+#ifdef DEBUG
 #include "xrRender_console.h"
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 occRasterizer Raster;
 
 static void propagade_depth(LPVOID p_dest, LPVOID p_src, int dim)
@@ -68,6 +70,8 @@ BOOL shared(occTri* T1, occTri* T2);
 
 void occRasterizer::propagade()
 {
+    ZoneScoped;
+
     // Clip-and-propagade zero level
     occTri** pFrame = get_frame();
     float* pDepth = get_depth();
@@ -217,3 +221,4 @@ BOOL occRasterizer::test(float _x0, float _y0, float _x1, float _y1, float _z)
     return FALSE;
     */
 }
+} // namespace xray::render::RENDER_NAMESPACE

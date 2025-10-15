@@ -1,9 +1,10 @@
-#ifndef __XR_GAMMA_H__
-#define __XR_GAMMA_H__
+#pragma once
 
 //-----------------------------------------------------------------------------------------------------------
 // Gamma control
 //-----------------------------------------------------------------------------------------------------------
+namespace xray::render::RENDER_NAMESPACE
+{
 class CGammaControl
 {
     float fGamma;
@@ -32,16 +33,12 @@ public:
         Balance.set(cBalance);
     }
 
-    void Update();
+    void Update() const;
 
 private:
+    void GenLUT(u16* r, u16* g, u16* b, u16 count) const;
 #if defined(USE_DX11)
-    void GenLUT(const DXGI_GAMMA_CONTROL_CAPABILITIES& GC, DXGI_GAMMA_CONTROL& G);
-#elif defined(USE_DX9) || defined(USE_OGL)
-    void GenLUT(D3DGAMMARAMP& G);
-#else
-#   error No graphics API selected or enabled!
+    void GenLUT(const DXGI_GAMMA_CONTROL_CAPABILITIES& GC, DXGI_GAMMA_CONTROL& G) const;
 #endif
 };
-
-#endif
+} // namespace xray::render::RENDER_NAMESPACE

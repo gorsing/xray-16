@@ -28,7 +28,7 @@ FactionState::FactionState():
 	m_target._set     (nullptr);
 	m_target_desc._set(nullptr);
 	m_location._set   (nullptr);
-	
+
 	ResetStates();
 }
 
@@ -45,16 +45,16 @@ void FactionState::ResetStates()
 {
 	for ( int i = 0; i < war_state_count ; ++i )
 	{
-		m_war_state_str[i]._set( NULL );
-		m_war_state_hint_str[i]._set( NULL );
+		m_war_state_str[i] = nullptr;
+		m_war_state_hint_str[i] = nullptr;
 	}
 	/*for ( int i = 0; i < bonuses_count ; ++i )
 	{
-	bonuses_vs[i]._set( NULL );
+	bonuses_vs[i] = nullptr;
 	}*/
 }
 
-SCRIPT_EXPORT(FactionState, (),
+void FactionState::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -88,7 +88,7 @@ SCRIPT_EXPORT(FactionState, (),
             .property("war_state_hint4", &FactionState::get_war_state_hint4, &FactionState::set_war_state_hint4)
             .property("war_state_hint5", &FactionState::get_war_state_hint5, &FactionState::set_war_state_hint5)
 	];
-})
+}
 
 void FactionState::update_info()
 {
@@ -110,4 +110,3 @@ void FactionState::update_info()
     R_ASSERT(GEnv.ScriptEngine->functor( "pda.fill_faction_state", m_functor));
     m_functor(this);
 }
-

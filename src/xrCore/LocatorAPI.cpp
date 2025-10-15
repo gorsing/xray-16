@@ -9,6 +9,9 @@
 #include <direct.h>
 #include <sys/stat.h>
 #include <sys/utime.h>
+#elif defined(XR_PLATFORM_POSIX)
+#include <SDL.h>
+#include <glob.h>
 #endif
 
 #include "FS_internal.h"
@@ -16,12 +19,6 @@
 #include "file_stream_reader.h"
 #include "xrCore/Threading/Lock.hpp"
 #include "Crypto/trivial_encryptor.h"
-
-#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
-#include "xrstring.h" // XXX: remove
-#include <SDL.h> // XXX: remove
-#include <glob.h>
-#endif
 
 constexpr size_t VFS_STANDARD_FILE = std::numeric_limits<size_t>::max();
 
@@ -169,10 +166,10 @@ CLocatorAPI::CLocatorAPI() :
     SYSTEM_INFO sys_inf;
     GetSystemInfo(&sys_inf);
     dwAllocGranularity = sys_inf.dwAllocationGranularity;
-#elif defined(XR_PLATFORM_LINUX)
-    dwAllocGranularity = sysconf(_SC_PAGE_SIZE);
-#elif defined(XR_PLATFORM_APPLE) || defined(XR_PLATFORM_BSD)
+#elif defined(XR_PLATFORM_APPLE)
     dwAllocGranularity = getpagesize();
+#elif defined(XR_PLATFORM_POSIX)
+    dwAllocGranularity = sysconf(_SC_PAGE_SIZE);
 #else
 #   error Select or add implementation for your platform
 #endif
@@ -183,7 +180,6 @@ CLocatorAPI::CLocatorAPI() :
 CLocatorAPI::~CLocatorAPI()
 {
     VERIFY(0 == m_iLockRescan);
-    _dump_open_files(1);
     xr_delete(m_auth_lock);
 }
 
@@ -198,6 +194,8 @@ const CLocatorAPI::file* CLocatorAPI::RegisterExternal(pcstr name)
 const CLocatorAPI::file* CLocatorAPI::Register(
     pcstr name, size_t vfs, u32 crc, u32 ptr, u32 size_real, u32 size_compressed, u32 modif)
 {
+    ZoneScoped;
+
     string256 temp_file_name;
     xr_strcpy(temp_file_name, sizeof temp_file_name, name);
     xr_fs_strlwr(temp_file_name);
@@ -329,7 +327,7 @@ IReader* open_chunk(void* ptr, u32 ID, pcstr archiveName, size_t archiveSize, bo
     }
     return nullptr;
 };
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
 IReader* open_chunk(int fd, u32 ID, pcstr archiveName, size_t archiveSize, bool shouldDecrypt = false)
 {
     u32 dwType;
@@ -339,22 +337,26 @@ IReader* open_chunk(int fd, u32 ID, pcstr archiveName, size_t archiveSize, bool 
 
     while (true)
     {
-        read_byte = ::read(fd, &dwType, 4);
+        read_byte = _read(fd, &dwType, 4);
         if (read_byte == -1)
+            return nullptr;
+        else if (read_byte == 0)
             return nullptr;
 
         u32 tempSize = 0;
-        read_byte = ::read(fd, &tempSize, 4);
+        read_byte = _read(fd, &tempSize, 4);
         dwSize = tempSize;
         if (read_byte == -1)
+            return nullptr;
+        else if (read_byte == 0)
             return nullptr;
 
         if ((dwType & ~CFS_CompressMark) == ID)
         {
             u8* src_data = xr_alloc<u8>(dwSize);
-            read_byte = ::read(fd, src_data, dwSize);
+            read_byte = _read(fd, src_data, dwSize);
 
-            VERIFY(read_byte == dwSize);
+            VERIFY(static_cast<size_t>(read_byte) == dwSize);
             if (dwType & CFS_CompressMark)
             {
                 u8* dest = nullptr;
@@ -390,6 +392,8 @@ IReader* open_chunk(int fd, u32 ID, pcstr archiveName, size_t archiveSize, bool 
 
 void CLocatorAPI::LoadArchive(archive& A, pcstr entrypoint)
 {
+    ZoneScoped;
+
     // Create base path
     string_path fs_entry_point;
     bool shouldDecrypt = false;
@@ -471,13 +475,13 @@ void CLocatorAPI::archive::open()
     if (hSrcFile && hSrcMap)
         return;
 
-    hSrcFile = CreateFile(*path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+    hSrcFile = CreateFile(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
     R_ASSERT(hSrcFile != INVALID_HANDLE_VALUE);
     hSrcMap = CreateFileMapping(hSrcFile, nullptr, PAGE_READONLY, 0, 0, nullptr);
     R_ASSERT(hSrcMap != INVALID_HANDLE_VALUE);
-    stat(*path, &file_info);
+    stat(path.c_str(), &file_info);
     modif = file_info.st_mtime;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     // Open the file
     if (hSrcFile)
         return;
@@ -507,7 +511,7 @@ void CLocatorAPI::archive::close()
     hSrcMap = nullptr;
     CloseHandle(hSrcFile);
     hSrcFile = nullptr;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     ::close(hSrcFile);
     hSrcFile = -1;
 #else
@@ -517,6 +521,8 @@ void CLocatorAPI::archive::close()
 
 void CLocatorAPI::ProcessArchive(pcstr _path)
 {
+    ZoneScoped;
+
     // find existing archive
     shared_str path = _path;
 
@@ -567,21 +573,6 @@ void CLocatorAPI::unload_archive(CLocatorAPI::archive& A)
     A.close();
 }
 
-bool CLocatorAPI::load_all_unloaded_archives()
-{
-    bool res = false;
-    for (auto& archive : m_archives)
-    {
-        if (!archive.hSrcFile)
-        {
-            LoadArchive(archive);
-            res = true;
-        }
-    }
-
-    return res;
-}
-
 bool ignore_name(const char* _name)
 {
     if (!strcmp(_name, "Thumbs.db"))
@@ -612,11 +603,13 @@ bool ignore_name(const char* _name)
 
 void CLocatorAPI::ProcessOne(pcstr path, const _finddata_t& entry)
 {
+    ZoneScoped;
+
     string_path N;
 #if defined(XR_PLATFORM_WINDOWS)
     xr_strcpy(N, sizeof N, path);
     xr_strcat(N, entry.name);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     xr_strcpy(N, sizeof N, entry.name);
 #else
 #   error Specify code path for your platform
@@ -669,7 +662,7 @@ bool ignore_path(pcstr _path)
     }
     else
         return true;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     pstr conv_path = xr_strdup(_path);
     convert_path_separators(conv_path);
     int h = ::open(conv_path, O_RDONLY | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
@@ -688,6 +681,8 @@ bool ignore_path(pcstr _path)
 
 bool CLocatorAPI::Recurse(pcstr path)
 {
+    ZoneScoped;
+
     string_path scanPath = { 0 };
     xr_strcpy(scanPath, sizeof scanPath, path);
     xr_strcat(scanPath, ".xrignore");
@@ -702,7 +697,7 @@ bool CLocatorAPI::Recurse(pcstr path)
     intptr_t handle = _findfirst(scanPath, &findData);
     if (handle == -1)
         return false;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     glob_t globbuf;
 
     globbuf.gl_offs = 256;
@@ -723,7 +718,7 @@ bool CLocatorAPI::Recurse(pcstr path)
     {
 #if defined(XR_PLATFORM_WINDOWS)
         // do nothing
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
         xr_strcpy(findData.name, globbuf.gl_pathv[handle - done]);
         struct stat fi;
         stat(findData.name, &fi);
@@ -755,7 +750,7 @@ bool CLocatorAPI::Recurse(pcstr path)
             xr_strcpy(fullPath, sizeof fullPath, path);
             xr_strcat(fullPath, findData.name);
             ignore = ignore_name(findData.name) || ignore_path(fullPath);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
             xr_strcpy(fullPath, sizeof fullPath, findData.name); // glob return full path to file
             ignore = ignore_name(findData.name);
 #else
@@ -770,7 +765,7 @@ bool CLocatorAPI::Recurse(pcstr path)
             rec_files.push_back(findData);
 #ifdef XR_PLATFORM_WINDOWS
         done = _findnext(handle, &findData);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
         done--;
 #else
 #   error Select or add implementation for your platform
@@ -778,7 +773,7 @@ bool CLocatorAPI::Recurse(pcstr path)
     }
 #ifdef XR_PLATFORM_WINDOWS
     _findclose(handle);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     globfree(&globbuf);
 #else
 #   error Select or add implementation for your platform
@@ -828,7 +823,7 @@ void CLocatorAPI::setup_fs_path(pcstr fs_name)
 
 #if defined(XR_PLATFORM_WINDOWS)
     _fullpath(full_current_directory, fs_path, sizeof full_current_directory);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     if (SDL_strlen(fs_path) != 0)
     {
         char *tmp_path = realpath(fs_path, NULL);
@@ -856,7 +851,7 @@ void CLocatorAPI::setup_fs_path(pcstr fs_name)
              * I propose adding shaders from <CMAKE_INSTALL_FULL_DATAROOTDIR>/openxray/gamedata/shaders so that we remove unnecessary questions from users who want to start
              * the game using resources not from the proposed ~/.local/share/GSC Game World/Game in this case, this section of code can be safely removed */
             chdir(pref_path);
-            constexpr pcstr install_dir = MACRO_TO_STRING(CMAKE_INSTALL_FULL_DATAROOTDIR);
+            static constexpr pcstr install_dir = CMAKE_INSTALL_FULL_DATAROOTDIR;
             string_path tmp, tmp_link;
             xr_sprintf(tmp, "%sfsgame.ltx", pref_path);
             struct stat statbuf;
@@ -944,6 +939,8 @@ IReader* CLocatorAPI::setup_fs_ltx(pcstr fs_name)
 
 void CLocatorAPI::_initialize(u32 flags, pcstr target_folder, pcstr fs_name)
 {
+    ZoneScoped;
+
     char _delimiter = '|'; //','
     if (m_Flags.is(flReady))
         return;
@@ -970,6 +967,7 @@ void CLocatorAPI::_initialize(u32 flags, pcstr target_folder, pcstr fs_name)
     }
     else
     {
+        ZoneScopedN("Process FS ltx");
         IReader* pFSltx = setup_fs_ltx(fs_name);
 
         // append all pathes
@@ -980,6 +978,8 @@ void CLocatorAPI::_initialize(u32 flags, pcstr target_folder, pcstr fs_name)
 
         while (!pFSltx->eof())
         {
+            ZoneScopedN("Read string");
+
             pFSltx->r_string(buf, sizeof buf);
             if (buf[0] == ';')
                 continue;
@@ -1032,7 +1032,7 @@ void CLocatorAPI::_initialize(u32 flags, pcstr target_folder, pcstr fs_name)
     };
 
     const size_t M2 = Memory.mem_usage();
-    Msg("FS: %d files cached %d archives, %dKb memory used.", m_files.size(), m_archives.size(), (M2 - M1) / 1024);
+    Msg("FS: %zu files cached %zu archives, %zuKb memory used.", m_files.size(), m_archives.size(), (M2 - M1) / 1024);
 
     m_Flags.set(flReady, true);
 
@@ -1063,7 +1063,7 @@ void CLocatorAPI::_initialize(u32 flags, pcstr target_folder, pcstr fs_name)
 
 void CLocatorAPI::_destroy()
 {
-    CloseLog();
+    ZoneScoped;
 
     for (auto& it : m_files)
     {
@@ -1086,6 +1086,9 @@ void CLocatorAPI::_destroy()
         it.close();
     }
     m_archives.clear();
+
+    _dump_open_files(1);
+    CloseLog();
 }
 
 const CLocatorAPI::file* CLocatorAPI::GetFileDesc(pcstr path)
@@ -1243,7 +1246,7 @@ size_t CLocatorAPI::file_list(FS_FileSet& dest, pcstr path, u32 flags /*= FS_Lis
             // file
             if ((flags & FS_ListFiles) == 0)
                 continue;
-            LPCSTR entry_begin = entry.name + base_len;
+            pcstr entry_begin = entry.name + base_len;
             if (flags & FS_RootOnly && strchr(entry_begin, _DELIMITER))
                 continue; // folder in folder
             // check extension
@@ -1277,7 +1280,7 @@ size_t CLocatorAPI::file_list(FS_FileSet& dest, pcstr path, u32 flags /*= FS_Lis
             // folder
             if ((flags & FS_ListFolders) == 0)
                 continue;
-            LPCSTR entry_begin = entry.name + base_len;
+            pcstr entry_begin = entry.name + base_len;
 
             if (flags & FS_RootOnly && strchr(entry_begin, _DELIMITER) != end_symbol)
                 continue; // folder in folder
@@ -1297,9 +1300,9 @@ void CLocatorAPI::check_cached_files(pstr fname, const size_t& fname_size, const
     if (!path_exist("$server_root$"))
         return;
 
-    LPCSTR path_base = get_path("$server_root$")->m_Path;
+    pcstr path_base = get_path("$server_root$")->m_Path;
     size_t len_base = xr_strlen(path_base);
-    LPCSTR path_file = fname;
+    pcstr path_file = fname;
     const size_t len_file = xr_strlen(path_file);
     if (len_file <= len_base)
         return;
@@ -1401,7 +1404,7 @@ void CLocatorAPI::file_from_archive(IReader*& R, pcstr fname, const file& desc)
 #if defined(XR_PLATFORM_WINDOWS)
     u8* ptr = (u8*)MapViewOfFile(A.hSrcMap, FILE_MAP_READ, 0, start, sz);
     VERIFY3(ptr, "cannot create file mapping on file", fname);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     u8* ptr = (u8*)::mmap(NULL, sz, PROT_READ, MAP_SHARED, A.hSrcFile, start);
     VERIFY3(ptr && ptr != MAP_FAILED, "cannot create file mapping on file", fname);
 #else
@@ -1409,7 +1412,7 @@ void CLocatorAPI::file_from_archive(IReader*& R, pcstr fname, const file& desc)
 #endif
 
     string1024 temp;
-    xr_sprintf(temp, sizeof temp, "%s:%s", *A.path, fname);
+    xr_sprintf(temp, sizeof temp, "%s:%s", A.path.c_str(), fname);
 
 #ifdef FS_DEBUG
     register_file_mapping(ptr, sz, temp);
@@ -1428,7 +1431,7 @@ void CLocatorAPI::file_from_archive(IReader*& R, pcstr fname, const file& desc)
     R = xr_new<CTempReader>(dest, desc.size_real, 0);
 #if defined(XR_PLATFORM_WINDOWS)
     UnmapViewOfFile(ptr);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     ::munmap(ptr, sz);
 #else
 #   error Select or add implementation for your platform
@@ -1448,7 +1451,7 @@ void CLocatorAPI::file_from_archive(CStreamReader*& R, pcstr fname, const file& 
     R = xr_new<CStreamReader>();
 #if defined(XR_PLATFORM_WINDOWS)
     R->construct(A.hSrcMap, desc.ptr, desc.size_compressed, A.size, BIG_FILE_READER_WINDOW_SIZE);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     R->construct(A.hSrcFile, desc.ptr, desc.size_compressed, A.size, BIG_FILE_READER_WINDOW_SIZE);
 #else
 #   error Select or add implementation for your platform
@@ -1591,8 +1594,6 @@ T* CLocatorAPI::r_open_impl(pcstr path, pcstr _fname)
     else
         file_from_archive(R, fname, *desc);
 
-    R->set_age(desc->modif);
-
 #ifdef DEBUG
     if (R && m_Flags.is(flBuildCopy | flReady))
         copy_file_to_build(R, source_name);
@@ -1670,7 +1671,7 @@ void CLocatorAPI::w_close(IWriter*& S)
             struct _stat st;
             _stat(fname, &st);
             Register(fname, VFS_STANDARD_FILE, 0, 0, st.st_size, st.st_size, (u32)st.st_mtime);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
             struct stat st;
             ::stat(fname, &st);
             Register(fname, VFS_STANDARD_FILE, 0, 0, st.st_size, st.st_size, (u32)st.st_mtime);

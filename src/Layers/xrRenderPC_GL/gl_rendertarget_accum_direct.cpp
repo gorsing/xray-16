@@ -2,6 +2,8 @@
 #include "xrEngine/IGame_Persistent.h"
 #include "xrEngine/Environment.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 //////////////////////////////////////////////////////////////////////////
 // tables to calculate view-frustum bounds in world space
 // note: D3D uses [0..1] range for Z
@@ -173,7 +175,6 @@ void CRenderTarget::accum_direct(CBackend& cmd_list, u32 sub_phase)
         };
 
         // compute xforms
-        FPU::m64r();
 
         // shadow xform
         Fmatrix m_shadow;
@@ -191,7 +192,6 @@ void CRenderTarget::accum_direct(CBackend& cmd_list, u32 sub_phase)
                 bias_t.translate(bias);
                 m_shadow.mulB_44(bias_t);
             }
-            FPU::m24r();
         }
 
         // clouds xform
@@ -259,9 +259,8 @@ void CRenderTarget::accum_direct(CBackend& cmd_list, u32 sub_phase)
         }
         else
         {
-            extern float OLES_SUN_LIMIT_27_01_07;
             zMin = ps_r2_sun_near;
-            zMax = OLES_SUN_LIMIT_27_01_07;
+            zMax = ps_r2_sun_far;
         }
         center_pt.mad(Device.vCameraPosition, Device.vCameraDirection, zMin);
         Device.mFullTransform.transform(center_pt);
@@ -469,7 +468,6 @@ void CRenderTarget::accum_direct_cascade(CBackend& cmd_list, u32 sub_phase, Fmat
         };
 
         // compute xforms
-        FPU::m64r();
 
         // shadow xform
         Fmatrix m_shadow;
@@ -487,7 +485,6 @@ void CRenderTarget::accum_direct_cascade(CBackend& cmd_list, u32 sub_phase, Fmat
                 bias_t.translate(bias);
                 m_shadow.mulB_44(bias_t);
             }
-            FPU::m24r();
         }
 
         // clouds xform
@@ -592,9 +589,8 @@ void CRenderTarget::accum_direct_cascade(CBackend& cmd_list, u32 sub_phase, Fmat
         }
         else
         {
-            extern float OLES_SUN_LIMIT_27_01_07;
             zMin = ps_r2_sun_near;
-            zMax = OLES_SUN_LIMIT_27_01_07;
+            zMax = ps_r2_sun_far;
         }
         center_pt.mad(Device.vCameraPosition, Device.vCameraDirection, zMin);
         Device.mFullTransform.transform(center_pt);
@@ -885,7 +881,6 @@ void CRenderTarget::accum_direct_f(CBackend& cmd_list, u32 sub_phase)
         // compute xforms
         Fmatrix m_shadow;
         {
-            FPU::m64r();
             Fmatrix xf_project;
             xf_project.mul(m_TexelAdjust, fuckingsun->X.D[0].combine);
             m_shadow.mul(xf_project, Device.mInvView);
@@ -899,7 +894,6 @@ void CRenderTarget::accum_direct_f(CBackend& cmd_list, u32 sub_phase)
                 bias_t.translate(bias);
                 m_shadow.mulB_44(bias_t);
             }
-            FPU::m24r();
         }
 
         // Make jitter texture
@@ -1182,12 +1176,11 @@ void CRenderTarget::accum_direct_volumetric(u32 sub_phase, const u32 Offset, con
         }
         else
         {
-            extern float OLES_SUN_LIMIT_27_01_07;
             if (RImplementation.o.oldshadowcascades)
                 zMin = ps_r2_sun_near;
             else
                 zMin = 0; /////*****************************************************************************************
-            zMax = OLES_SUN_LIMIT_27_01_07;
+            zMax = ps_r2_sun_far;
         }
 
         RCache.set_c("volume_range", zMin, zMax, 0.f, 0.f);
@@ -1278,3 +1271,4 @@ void CRenderTarget::accum_direct_volumetric(u32 sub_phase, const u32 Offset, con
         //		u_DBT_disable	();
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

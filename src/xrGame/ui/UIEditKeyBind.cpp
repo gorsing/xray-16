@@ -4,6 +4,7 @@
 #include "xrEngine/xr_level_controller.h"
 #include "Common/object_broker.h"
 #include "xrEngine/XR_IOConsole.h"
+#include "xrUICore/XML/UITextureMaster.h"
 
 CUIEditKeyBind::CUIEditKeyBind(bool primary, bool isGamepadBinds /*= false*/)
     : CUIStatic("CUIEditKeyBind")
@@ -15,6 +16,12 @@ CUIEditKeyBind::CUIEditKeyBind(bool primary, bool isGamepadBinds /*= false*/)
     m_keyboard = NULL;
     m_opt_backup_value = NULL;
     m_action = NULL;
+    UI().Focus().RegisterFocusable(this);
+}
+
+CUIEditKeyBind::~CUIEditKeyBind()
+{
+    UI().Focus().UnregisterFocusable(this);
 }
 
 u32 CutStringByLength(CGameFont* font, LPCSTR src, pstr dst, u32 dst_size, float length)
@@ -64,7 +71,14 @@ void CUIEditKeyBind::InitKeyBind(Fvector2 pos, Fvector2 size)
 {
     CUIStatic::SetWndPos(pos);
     CUIStatic::SetWndSize(size);
-    InitTexture("ui_listline2");
+
+    if (CUITextureMaster::ItemExist("ui_listline2")) // cop
+        InitTexture("ui_listline2");
+    else if (CUITextureMaster::ItemExist("ui_options_string")) // soc
+        InitTexture("ui_options_string");
+    else if (CUITextureMaster::ItemExist("ui_options_string_back")) // cs (exists in soc also, that's why it's last)
+        InitTexture("ui_options_string_back");
+
     TextItemControl()->SetFont(UI().Font().pFontLetterica16Russian);
     SetStretchTexture(true);
     SetEditMode(false);
@@ -137,9 +151,9 @@ bool CUIEditKeyBind::OnKeyboardAction(int dik, EUIMessages keyboard_action)
     return false;
 }
 
-bool CUIEditKeyBind::OnControllerAction(int axis, float x, float y, EUIMessages controller_action)
+bool CUIEditKeyBind::OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action)
 {
-    if (CUIStatic::OnControllerAction(axis, x, y, controller_action))
+    if (CUIStatic::OnControllerAction(axis, state, controller_action))
         return true;
 
     if (m_isEditMode)
@@ -167,7 +181,7 @@ bool CUIEditKeyBind::OnControllerAction(int axis, float x, float y, EUIMessages 
 }
 
 void CUIEditKeyBind::Update()
-{ 
+{
     CUIStatic::Update();
 }
 
@@ -179,11 +193,15 @@ void CUIEditKeyBind::SetEditMode(bool b)
     {
         SetColorAnimation("ui_map_area_anim", LA_CYCLIC | LA_ONLYALPHA | LA_TEXTCOLOR);
         TextureOn();
+        if (GetParent())
+            GetParent()->SetKeyboardCapture(this, true);
     }
     else
     {
         SetColorAnimation(NULL, 0);
         TextureOff();
+        if (GetParent())
+            GetParent()->SetKeyboardCapture(this, false);
     }
 }
 

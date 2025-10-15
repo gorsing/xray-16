@@ -14,14 +14,14 @@
 #include "xrCommon/predicates.h"
 #include "Common/Noncopyable.hpp"
 
-#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#if defined(XR_PLATFORM_POSIX)
 #include <stdint.h>
 #define _A_HIDDEN      0x02
 #define _A_SUBDIR 0x00000010
 
-#if defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K)
+#if defined(XR_ARCHITECTURE_X64) || defined(XR_ARCHITECTURE_E2K) || defined(XR_ARCHITECTURE_PPC64)
 #define _finddata_t _finddata64i32_t
-#elif defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_ARM) || defined(XR_ARCHITECTURE_ARM64)
+#elif defined(XR_ARCHITECTURE_X86) || defined(XR_ARCHITECTURE_ARM) || defined(XR_ARCHITECTURE_ARM64) || defined(XR_ARCHITECTURE_PPC)
 #define _finddata_t _finddata32_t
 #endif
 
@@ -102,13 +102,13 @@ public:
 #if defined(XR_PLATFORM_WINDOWS)
         void *hSrcFile = nullptr;
         void *hSrcMap = nullptr;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
         int hSrcFile = 0;
 #else
 #   error Select or add implementation for your platform
 #endif
         CInifile* header = nullptr;
-        
+
         archive() = default;
         void open();
         void close();
@@ -266,7 +266,6 @@ public:
 
     size_t file_list(FS_FileSet& dest, pcstr path, u32 flags = FS_ListFiles, pcstr mask = nullptr);
 
-    bool load_all_unloaded_archives();
     void unload_archive(archive& A);
 
     void auth_generate(xr_vector<shared_str>& ignore, xr_vector<shared_str>& important);

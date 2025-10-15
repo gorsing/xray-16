@@ -1,13 +1,13 @@
 #include "stdafx.h"
 #pragma hdrstop
 
-#include	"Layers/xrRender/ResourceManager.h"
-#include	"Layers/xrRender/tss.h"
-#include	"Layers/xrRender/Blender.h"
-#include	"Layers/xrRender/Blender_Recorder.h"
+#include "Layers/xrRender/ResourceManager.h"
+#include "Layers/xrRender/tss.h"
+#include "Layers/xrRender/Blender.h"
+#include "Layers/xrRender/Blender_Recorder.h"
 //	adopt_compiler don't have = operator And it can't have = operator
-#include	"xrScriptEngine/script_engine.hpp"
-#include	"luabind/return_reference_to_policy.hpp"
+#include "xrScriptEngine/script_engine.hpp"
+#include "xrScriptEngine/script_space.hpp"
 #include "xrCore/Threading/ScopeLock.hpp"
 
 #ifdef	DEBUG
@@ -16,6 +16,8 @@
 #define MDB
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class adopt_dx10options
 {
 public:
@@ -31,8 +33,8 @@ class adopt_sampler
     CBlender_Compile* C;
     u32 stage;
 public:
-    adopt_sampler(CBlender_Compile* _C, u32 _stage) : C(_C), stage(_stage) { if (u32(-1) == stage) C = nullptr; }
-    adopt_sampler(const adopt_sampler& _C) : C(_C.C), stage(_C.stage) { if (u32(-1) == stage) C = nullptr; }
+    adopt_sampler(CBlender_Compile* c, u32 st) : C(c), stage(st) { if (u32(-1) == stage) C = nullptr; }
+    adopt_sampler(const adopt_sampler& other) : C(other.C), stage(other.stage) { if (u32(-1) == stage) C = nullptr; }
 
     adopt_sampler& _texture(LPCSTR texture)
     {
@@ -163,7 +165,7 @@ public:
 
 #pragma warning( push )
 #pragma warning( disable : 4512)
-// wrapper																																					
+// wrapper
 class adopt_compiler
 {
     CBlender_Compile* C;
@@ -176,8 +178,8 @@ class adopt_compiler
     }
 
 public:
-    adopt_compiler(CBlender_Compile* _C, bool& bFirstPass) : C(_C), m_bFirstPass(bFirstPass) { m_bFirstPass = true; }
-    adopt_compiler(const adopt_compiler& _C) : C(_C.C), m_bFirstPass(_C.m_bFirstPass) { }
+    adopt_compiler(CBlender_Compile* compiler, bool& bFirstPass) : C(compiler), m_bFirstPass(bFirstPass) { m_bFirstPass = true; }
+    adopt_compiler(const adopt_compiler& other) : C(other.C), m_bFirstPass(other.m_bFirstPass) { }
 
     adopt_compiler& _options(int P, bool S)
     {
@@ -223,7 +225,7 @@ public:
         return *this;
     }
 
-    adopt_compiler& _ZB(bool _test, bool _write)
+    adopt_compiler& _zbuffer(bool _test, bool _write)
     {
         C->PassSET_ZB(_test, _write);
         return *this;
@@ -351,7 +353,7 @@ void CResourceManager::LS_Load()
                 .def("distort",                &adopt_compiler::_o_distort,              return_reference_to<1>())
                 .def("wmark",                  &adopt_compiler::_o_wmark,                return_reference_to<1>())
                 .def("fog",                    &adopt_compiler::_fog,                    return_reference_to<1>())
-                .def("zb",                     &adopt_compiler::_ZB,                     return_reference_to<1>())
+                .def("zb",                     &adopt_compiler::_zbuffer,                     return_reference_to<1>())
                 .def("blend",                  &adopt_compiler::_blend,                  return_reference_to<1>())
                 .def("aref",                   &adopt_compiler::_aref,                   return_reference_to<1>())
                 //	For compatibility only
@@ -542,9 +544,9 @@ ShaderElement* CBlender_Compile::_lua_Compile(LPCSTR namesp, LPCSTR name)
     RS.Invalidate();
 
     // Compile
-    LPCSTR t_0 = *L_textures[0] ? *L_textures[0] : "null";
-    LPCSTR t_1 = L_textures.size() > 1 ? *L_textures[1] : "null";
-    LPCSTR t_d = detail_texture ? detail_texture : "null";
+    pcstr t_0 = L_textures[0].c_str() ? L_textures[0].c_str() : "null";
+    pcstr t_1 = L_textures.size() > 1 ? L_textures[1].c_str() : "null";
+    pcstr t_d = detail_texture ? detail_texture : "null";
     object shader = RImplementation.Resources->ScriptEngine.name_space(namesp);
     functor<void> element = object_cast<functor<void>>(shader[name]);
     bool bFirstPass = false;
@@ -554,3 +556,4 @@ ShaderElement* CBlender_Compile::_lua_Compile(LPCSTR namesp, LPCSTR name)
     ShaderElement* _r = RImplementation.Resources->_CreateElement(std::move(E));
     return _r;
 }
+} // namespace xray::render::RENDER_NAMESPACE

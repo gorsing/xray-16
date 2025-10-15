@@ -1,10 +1,9 @@
-#ifndef TSS_H
-#define TSS_H
 #pragma once
 
 #include "tss_def.h"
 
-#if defined(USE_DX11) || defined(USE_OGL)
+namespace xray::render::RENDER_NAMESPACE
+{
 enum XRDX11SAMPLERSTATETYPE
 {
     XRDX11SAMP_ANISOTROPICFILTER = 256,
@@ -16,7 +15,6 @@ enum XRDX11RENDERSTATETYPE
 {
     XRDX11RS_ALPHATOCOVERAGE = 1024
 };
-#endif // !USE_DX9
 
 class CSimulatorTSS
 {
@@ -96,5 +94,4 @@ public:
     void SetRS(u32 N, u32 V) { RS.Set(container, N, V); }
     SimulatorStates& GetContainer() { return container; }
 };
-
-#endif
+} // namespace xray::render::RENDER_NAMESPACE

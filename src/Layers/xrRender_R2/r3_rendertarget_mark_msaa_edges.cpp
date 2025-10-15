@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void CRenderTarget::mark_msaa_edges()
 {
     u32 Offset;
@@ -37,7 +39,7 @@ void CRenderTarget::mark_msaa_edges()
 #endif
     RCache.set_Element(s_mark_msaa_edges->E[0]);
     RCache.set_Geometry(g_combine_2UV);
-    RCache.set_Stencil(TRUE, D3DCMP_ALWAYS, 0x80, 0xFF, 0x80, 
+    RCache.set_Stencil(TRUE, D3DCMP_ALWAYS, 0x80, 0xFF, 0x80,
         D3DSTENCILOP_KEEP, D3DSTENCILOP_REPLACE, D3DSTENCILOP_KEEP);
     RCache.set_ColorWriteEnable(FALSE);
     RCache.set_ZFunc(D3DCMP_ALWAYS);
@@ -46,3 +48,4 @@ void CRenderTarget::mark_msaa_edges()
     RCache.Render(D3DPT_TRIANGLELIST, Offset, 0, 4, 0, 2);
     RCache.set_ColorWriteEnable();
 }
+} // namespace xray::render::RENDER_NAMESPACE

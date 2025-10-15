@@ -54,8 +54,6 @@ class CAI_Crow : public CEntity
         void Unload();
     };
 
-    Lock render_lock{}; // TODO: this can be avoided as well.
-
 public:
     void OnHitEndPlaying(CBlend* B);
 
@@ -144,6 +142,9 @@ public:
     virtual bool IsVisibleForZones() { return false; }
     virtual bool UsedAI_Locations();
     virtual void create_physic_shell();
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CGameObject);
 };
 
 #endif

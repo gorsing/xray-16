@@ -1,7 +1,7 @@
 #include "stdafx.h"
 #include "string_concatenations.h"
 
-#if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) // XXX: remove or cleanup
+#if !defined(XR_PLATFORM_WINDOWS) // XXX: remove or cleanup
 int _cdecl _resetstkoflw(void)
 {
     return 0;
@@ -108,7 +108,7 @@ void string_tupples::error_process() const
             }
         }
     }
-    VERIFY(overrun_string_index != -1);
+    VERIFY(overrun_string_index != u32(-1));
 
     strconcat_error::process(overrun_string_index, m_count, strings);
 }

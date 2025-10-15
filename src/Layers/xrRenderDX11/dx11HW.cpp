@@ -5,6 +5,10 @@
 #include "StateManager/dx11SamplerStateCache.h"
 #include "dx11TextureUtils.h"
 
+#include <SDL_syswm.h>
+
+namespace xray::render::RENDER_NAMESPACE
+{
 CHW HW;
 
 CHW::CHW()
@@ -49,6 +53,8 @@ void CHW::OnAppDeactivate()
 //////////////////////////////////////////////////////////////////////
 void CHW::CreateD3D()
 {
+    ZoneScoped;
+
     hDXGI = XRay::LoadModule("dxgi");
     hD3D = XRay::LoadModule("d3d11");
     if (!hD3D->IsLoaded() || !hDXGI->IsLoaded())
@@ -59,9 +65,13 @@ void CHW::CreateD3D()
 
     // Минимально поддерживаемая версия Windows => Windows Vista SP2 или Windows 7.
     const auto createDXGIFactory = static_cast<decltype(&CreateDXGIFactory1)>(hDXGI->GetProcAddress("CreateDXGIFactory1"));
-    R_CHK(createDXGIFactory(__uuidof(IDXGIFactory1), (void**)(&m_pFactory)));
+    if (createDXGIFactory)
+        createDXGIFactory(__uuidof(IDXGIFactory1), (void**)(&m_pFactory));
 
-    R_CHK(m_pFactory->EnumAdapters1(0, &m_pAdapter));
+    if (m_pFactory)
+        m_pFactory->EnumAdapters1(0, &m_pAdapter);
+
+    Valid = m_pAdapter;
 }
 
 void CHW::DestroyD3D()
@@ -71,10 +81,21 @@ void CHW::DestroyD3D()
 
     _SHOW_REF("refCount:m_pFactory", m_pFactory);
     _RELEASE(m_pFactory);
+
+    // Manually close and unload additional DLLs
+    // To make it work with DXVK, etc.
+    hD3D->Close();
+    hDXGI->Close();
+    if (auto hModule = GetModuleHandleA("d3d11.dll"))
+        FreeLibrary(hModule);
+    if (auto hModule = GetModuleHandleA("dxgi.dll"))
+        FreeLibrary(hModule);
 }
 
 void CHW::CreateDevice(SDL_Window* sdlWnd)
 {
+    ZoneScoped;
+
     CreateD3D();
     if (!Valid)
         return;
@@ -82,8 +103,9 @@ void CHW::CreateDevice(SDL_Window* sdlWnd)
     m_DriverType = Caps.bForceGPU_REF ? D3D_DRIVER_TYPE_REFERENCE : D3D_DRIVER_TYPE_HARDWARE;
 
     // Display the name of video board
-    DXGI_ADAPTER_DESC1 Desc;
-    R_CHK(m_pAdapter->GetDesc1(&Desc));
+    DXGI_ADAPTER_DESC1 Desc{};
+    if (FAILED(m_pAdapter->GetDesc1(&Desc)))
+        Msg("! [%s] failed to retrieve adapter description", __FUNCTION__);
     //  Warning: Desc.Description is wide string
     Msg("* GPU [vendor:%X]-[device:%X]: %S", Desc.VendorId, Desc.DeviceId, Desc.Description);
 
@@ -128,6 +150,8 @@ void CHW::CreateDevice(SDL_Window* sdlWnd)
 
     const auto createDevice = [&](const D3D_FEATURE_LEVEL* level, const u32 levels)
     {
+        ZoneScopedN("CreateDevice");
+
         static const auto d3d11CreateDevice = static_cast<PFN_D3D11_CREATE_DEVICE>(hD3D->GetProcAddress("D3D11CreateDevice"));
         return d3d11CreateDevice(m_pAdapter, D3D_DRIVER_TYPE_UNKNOWN,
             nullptr, createDeviceFlags, level, levels,
@@ -196,32 +220,50 @@ void CHW::CreateDevice(SDL_Window* sdlWnd)
 
     _SHOW_REF("* CREATE: DeviceREF:", pDevice);
 
-    // Create deferred contexts
-    for (int id = 0; id < R__NUM_PARALLEL_CONTEXTS; ++id)
+    // Register immediate context in profiler
+    if (ThisInstanceIsGlobal())
     {
-        R = pDevice->CreateDeferredContext(0, &d3d_contexts_pool[id]);
-        VERIFY(SUCCEEDED(R));
+        TaskScheduler->AddTask([this]
+        {
+            ZoneScopedN("TracyD3D11Context");
+            profiler_ctx = TracyD3D11Context(pDevice, get_context(CHW::IMM_CTX_ID));
+        });
+    }
+
+    // Create deferred contexts
+    if (ThisInstanceIsGlobal())
+    {
+        ZoneScopedN("Create deferred contexts");
+        for (int id = 0; id < R__NUM_PARALLEL_CONTEXTS; ++id)
+        {
+            R = pDevice->CreateDeferredContext(0, &d3d_contexts_pool[id]);
+            VERIFY(SUCCEEDED(R));
+        }
     }
 
     SDL_SysWMinfo info;
     SDL_VERSION(&info.version);
 
-    R_ASSERT2(SDL_GetWindowWMInfo(sdlWnd, &info), SDL_GetError());
+    if (!SDL_GetWindowWMInfo(sdlWnd, &info))
+    {
+        Msg("! Failed to retrieve SDL window handle: %s", SDL_GetError());
+        Valid = false;
+        return;
+    }
 
     const HWND hwnd = info.info.win.window;
 
     if (!CreateSwapChain2(hwnd))
     {
-        CreateSwapChain(hwnd);
+        if (!CreateSwapChain(hwnd))
+            Valid = false;
     }
 
     // Select depth-stencil format
     constexpr DXGI_FORMAT formats[] =
     {
-        DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+        //DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         DXGI_FORMAT_D24_UNORM_S8_UINT,
-        DXGI_FORMAT_D32_FLOAT,
-        DXGI_FORMAT_D16_UNORM
     };
     const DXGI_FORMAT selectedFormat = SelectFormat(D3D_FORMAT_SUPPORT_DEPTH_STENCIL, formats);
     if (selectedFormat == DXGI_FORMAT_UNKNOWN)
@@ -240,8 +282,10 @@ void CHW::CreateDevice(SDL_Window* sdlWnd)
     Msg("*   Texture memory: %d M", memory / (1024 * 1024));
 }
 
-void CHW::CreateSwapChain(HWND hwnd)
+bool CHW::CreateSwapChain(HWND hwnd)
 {
+    ZoneScoped;
+
     // Set up the presentation parameters
     DXGI_SWAP_CHAIN_DESC& sd = m_ChainDesc;
     ZeroMemory(&sd, sizeof(sd));
@@ -287,13 +331,16 @@ void CHW::CreateSwapChain(HWND hwnd)
     //  Additional set up
     sd.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH;
 
-    R_CHK(m_pFactory->CreateSwapChain(pDevice, &sd, &m_pSwapChain));
+    const auto hr = m_pFactory->CreateSwapChain(pDevice, &sd, &m_pSwapChain);
+    return SUCCEEDED(hr);
 }
 
 bool CHW::CreateSwapChain2(HWND hwnd)
 {
     if (strstr(Core.Params, "-no_dx11_2"))
         return false;
+
+    ZoneScoped;
 
 #ifdef HAS_DX11_2
     IDXGIFactory2* pFactory2{};
@@ -347,8 +394,12 @@ bool CHW::CreateSwapChain2(HWND hwnd)
     if (FAILED(result))
         return false;
 
+    if (FAILED(swapchain->GetDesc(&m_ChainDesc)))
+    {
+        _RELEASE(swapchain);
+        return false;
+    }
     m_pSwapChain = swapchain;
-    R_CHK(m_pSwapChain->GetDesc(&m_ChainDesc));
 
     m_pSwapChain->QueryInterface(__uuidof(IDXGISwapChain2), reinterpret_cast<void**>(&m_pSwapChain2));
 
@@ -378,13 +429,16 @@ void CHW::DestroyDevice()
         SSManager.ClearStateArray();
     }
     //  Must switch to windowed mode to release swap chain
-    if (!m_ChainDesc.Windowed)
+    if (!m_ChainDesc.Windowed && m_pSwapChain)
         m_pSwapChain->SetFullscreenState(FALSE, NULL);
 #ifdef HAS_DX11_2
     _RELEASE(m_pSwapChain2);
 #endif
     _SHOW_REF("refCount:m_pSwapChain", m_pSwapChain);
     _RELEASE(m_pSwapChain);
+
+    if (profiler_ctx)
+        TracyD3D11Destroy(profiler_ctx);
 
     _RELEASE(pContext1);
     for (int id = 0; id < R__NUM_CONTEXTS; ++id)
@@ -406,6 +460,7 @@ void CHW::DestroyDevice()
 //////////////////////////////////////////////////////////////////////
 void CHW::Reset()
 {
+    ZoneScoped;
     DXGI_SWAP_CHAIN_DESC& cd = m_ChainDesc;
     const bool bWindowed = ThisInstanceIsGlobal() ? psDeviceMode.WindowStyle != rsFullscreen : true;
     cd.Windowed = bWindowed;
@@ -471,30 +526,44 @@ void CHW::Present()
 {
     const bool bUseVSync = psDeviceMode.WindowStyle == rsFullscreen &&
         psDeviceFlags.test(rsVSync); // xxx: weird tearing glitches when VSync turned on for windowed mode in DX11
-    m_pSwapChain->Present(bUseVSync ? 1 : 0, 0);
-#ifdef HAS_DX11_2
-    if (m_pSwapChain2 && UsingFlipPresentationModel())
+
+    switch (m_pSwapChain->Present(bUseVSync ? 1 : 0, 0))
     {
-        const float fps = Device.GetStats().fFPS;
-        if (fps < 30)
-            m_pSwapChain2->SetSourceSize(UINT(Device.dwWidth * 0.85f), UINT(Device.dwHeight * 0.85f));
-        else if (fps < 15)
-            m_pSwapChain2->SetSourceSize(UINT(Device.dwWidth * 0.7f), UINT(Device.dwHeight * 0.7f));
+    case DXGI_STATUS_OCCLUDED:
+    case DXGI_ERROR_DEVICE_REMOVED:
+        doPresentTest = true;
+        break;
     }
-#endif
+
     CurrentBackBuffer = (CurrentBackBuffer + 1) % BackBufferCount;
+
+    TracyD3D11Collect(profiler_ctx);
 }
 
-DeviceState CHW::GetDeviceState() const
+DeviceState CHW::GetDeviceState()
 {
-    const auto result = m_pSwapChain->Present(0, DXGI_PRESENT_TEST);
-
-    switch (result)
+    if (doPresentTest)
     {
-        // Check if the device is ready to be reset
-    case DXGI_ERROR_DEVICE_RESET:
-        return DeviceState::NeedReset;
+        switch (m_pSwapChain->Present(0, DXGI_PRESENT_TEST))
+        {
+        case S_OK:
+            doPresentTest = false;
+            break;
+
+        case DXGI_STATUS_OCCLUDED:
+            // Do not render until we become visible again
+            return DeviceState::Lost;
+
+        case DXGI_ERROR_DEVICE_RESET:
+            return DeviceState::NeedReset;
+
+        case DXGI_ERROR_DEVICE_REMOVED:
+            FATAL("Graphics driver was updated or GPU was physically removed from computer.\n"
+                  "Please, restart the game.");
+            break;
+        }
     }
 
     return DeviceState::Normal;
 }
+} // namespace xray::render::RENDER_NAMESPACE

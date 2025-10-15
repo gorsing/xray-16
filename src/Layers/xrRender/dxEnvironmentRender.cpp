@@ -8,24 +8,49 @@
 #include "xrEngine/Environment.h"
 #include "xrEngine/xr_efflensflare.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 //////////////////////////////////////////////////////////////////////////
 // half box def
-static Fvector3 hbox_verts[24] = {
-    {-1.f, -1.f, -1.f }, {-1.f, -1.01f, -1.f},  // down
-    {1.f, -1.f, -1.f }, {1.f, -1.01f, -1.f},    // down
-    {-1.f, -1.f, 1.f},{-1.f, -1.01f, 1.f},      // down
-    {1.f, -1.f, 1.f},{1.f, -1.01f, 1.f},        // down
-    {-1.f, 1.f, -1.f}, {-1.f, 1.f, -1.f},
-    {1.f, 1.f, -1.f}, {1.f, 1.f, -1.f},
-    {-1.f, 1.f, 1.f}, {-1.f, 1.f, 1.f},
-    {1.f, 1.f, 1.f }, { 1.f, 1.f, 1.f},
-    {-1.f, 0.f, -1.f}, {-1.f, -1.f, -1.f},  // half
-    {1.f, 0.f, -1.f}, {1.f, -1.f, -1.f},    // half
-    {1.f, 0.f, 1.f}, {1.f, -1.f, 1.f},      // half
-    {-1.f, 0.f, 1.f}, {-1.f, -1.f, 1.f}     // half
+static Fvector3 hbox_verts[24] =
+{
+    {-1.f,   -1.f, -1.f}, { -1.f, -1.01f, -1.f}, // down
+    { 1.f,   -1.f, -1.f}, {  1.f, -1.01f, -1.f}, // down
+    {-1.f,   -1.f,  1.f}, { -1.f, -1.01f,  1.f}, // down
+    { 1.f,   -1.f,  1.f}, {  1.f, -1.01f,  1.f}, // down
+    {-1.f,    1.f, -1.f}, { -1.f,  1.f,   -1.f},
+    { 1.f,    1.f, -1.f}, {  1.f,  1.f,   -1.f},
+    {-1.f,    1.f,  1.f}, { -1.f,  1.f,    1.f},
+    { 1.f,    1.f,  1.f}, {  1.f,  1.f,    1.f},
+    {-1.f, -0.01f, -1.f}, { -1.f, -1.f,   -1.f}, // half
+    { 1.f, -0.01f, -1.f}, {  1.f, -1.f,   -1.f}, // half
+    { 1.f, -0.01f,  1.f}, {  1.f, -1.f,    1.f}, // half
+    {-1.f, -0.01f,  1.f}, { -1.f, -1.f,    1.f}  // half
 };
-static u16 hbox_faces[20 * 3] = {0, 2, 3, 3, 1, 0, 4, 5, 7, 7, 6, 4, 0, 1, 9, 9, 8, 0, 8, 9, 5, 5, 4, 8, 1, 3, 10, 10,
-    9, 1, 9, 10, 7, 7, 5, 9, 3, 2, 11, 11, 10, 3, 10, 11, 6, 6, 7, 10, 2, 0, 8, 8, 11, 2, 11, 8, 4, 4, 6, 11};
+
+static u16 hbox_faces[20 * 3] =
+{
+    0,   2,  3,
+    3,   1,  0,
+    4,   5,  7,
+    7,   6,  4,
+    0,   1,  9,
+    9,   8,  0,
+    8,   9,  5,
+    5,   4,  8,
+    1,   3, 10,
+    10,  9,  1,
+    9,  10,  7,
+    7,   5,  9,
+    3,   2, 11,
+    11, 10,  3,
+    10, 11,  6,
+    6,   7, 10,
+    2,   0,  8,
+    8,  11,  2,
+    11,  8,  4,
+    4,   6, 11
+};
 
 #pragma pack(push, 1)
 struct v_skybox
@@ -68,11 +93,7 @@ public:
     void Compile(CBlender_Compile& C) override
     {
         C.r_Pass("sky2", "sky2", FALSE, TRUE, FALSE);
-#if defined(USE_DX9)
-        C.r_Sampler_clf("s_sky0", "$null");
-        C.r_Sampler_clf("s_sky1", "$null");
-        C.r_Sampler_rtf("s_tonemap", "$user$tonemap"); //. hack
-#elif defined(USE_DX11)
+#if defined(USE_DX11)
         // C.r_Sampler_clf		("s_sky0",		"$null"			);
         // C.r_Sampler_clf		("s_sky1",		"$null"			);
         C.r_dx11Texture("s_sky0", "$null");
@@ -204,7 +225,7 @@ void dxEnvironmentRender::lerp(CEnvDescriptorMixer& currentEnv, IEnvDescriptorRe
 
 void dxEnvironmentRender::RenderSky(CEnvironment& env)
 {
-    GEnv.Render->rmFar(RCache);
+    RImplementation.rmFar(RCache);
 
     // draw sky box
     Fmatrix mSky;
@@ -230,7 +251,7 @@ void dxEnvironmentRender::RenderSky(CEnvironment& env)
     RCache.set_xform_world(mSky);
     RCache.set_Geometry(sh_2geom);
     RCache.set_Shader(sh_2sky);
-#if defined(USE_DX9) || defined(USE_DX11)
+#if defined(USE_DX11)
     RCache.set_Textures(&sky_r_textures);
 #elif defined(USE_OGL)
     if (HW.Caps.geometry.bVTF)
@@ -249,7 +270,7 @@ void dxEnvironmentRender::RenderSky(CEnvironment& env)
 #endif // USE_OGL
 
     // Sun
-    GEnv.Render->rmNormal(RCache);
+    RImplementation.rmNormal(RCache);
 #if RENDER != R_R1
     //
     // This hack is done to make sure that the state is set for sure:
@@ -278,7 +299,7 @@ void dxEnvironmentRender::RenderClouds(CEnvironment& env)
     if (!clouds_sh)
         return;
 
-    GEnv.Render->rmFar(RCache);
+    RImplementation.rmFar(RCache);
 
     Fmatrix mXFORM, mScale;
     mScale.scale(10, 0.4f, 10);
@@ -359,7 +380,7 @@ void dxEnvironmentRender::OnDeviceCreate()
             tclouds1_tstage = C->samp.index;
     }
 
-    const bool r2 = GEnv.Render->GenerationIsR2OrHigher();
+    const bool r2 = RImplementation.GenerationIsR2OrHigher();
     tonemap_tstage_2sky = sh_2sky->E[0]->passes[0]->T->find_texture_stage(r2_RT_luminance_cur, r2);
     tonemap_tstage_clouds = clouds_sh->E[0]->passes[0]->T->find_texture_stage(r2_RT_luminance_cur, r2);
 }
@@ -369,7 +390,7 @@ void dxEnvironmentRender::OnDeviceDestroy()
     sky_r_textures.clear();
     clouds_r_textures.clear();
 
-#if defined(USE_DX9) || defined(USE_DX11)
+#if defined(USE_DX11)
     tsky0->surface_set(nullptr);
     tsky1->surface_set(nullptr);
     t_envmap_0->surface_set(nullptr);
@@ -397,3 +418,4 @@ void dxEnvironmentRender::OnDeviceDestroy()
     tonemap_tstage_2sky = u32(-1);
     tonemap_tstage_clouds = u32(-1);
 }
+} // namespace xray::render::RENDER_NAMESPACE

@@ -197,9 +197,9 @@ bool CEntity::net_Spawn(CSE_Abstract* DC)
         if (monster)
         {
             MONSTER_COMMUNITY monster_community;
-            monster_community.set(pSettings->r_string(*cNameSect(), "species"));
+            monster_community.set(pSettings->r_string(cNameSect().c_str(), "species"));
 
-            if (monster_community.team() != 255)
+            if (monster_community.team() != NO_COMMUNITY_INDEX)
                 id_Team = monster_community.team();
         }
     }
@@ -229,7 +229,7 @@ bool CEntity::net_Spawn(CSE_Abstract* DC)
         ini = pKinematics->LL_UserData();
     if (ini)
     {
-        if (ini->section_exist("damage_section") && !use_simplified_visual())
+        if (ini->section_exist("damage_section"))
             CDamageManager::reload(pSettings->r_string("damage_section", "damage"), ini);
 
         CParticlesPlayer::LoadParticles(pKinematics);
@@ -253,35 +253,34 @@ void CEntity::net_Destroy()
 
 void CEntity::KillEntity(u16 whoID, bool bypass_actor_check)
 {
-    if (GameID() == eGameIDSingle && this->ID() == Actor()->ID())
+    if (IsGameTypeSingle() && this->ID() == Actor()->ID())
     {
-    //AVO: allow scripts to process actor condition and prevent actor's death or kill him if desired.
-    //IMPORTANT: if you wish to kill actor you need to call db.actor:kill(level:object_by_id(whoID), true) in actor_before_death callback, to ensure all objects are properly destroyed
-    // this will bypass below if block and go to normal KillEntity routine.
+        Actor()->use_HolderEx(nullptr, true);
 #ifdef ACTOR_BEFORE_DEATH_CALLBACK
+        //AVO: allow scripts to process actor condition and prevent actor's death or kill him if desired.
+        //IMPORTANT: if you wish to kill actor you need to call db.actor:kill(level:object_by_id(whoID), true) in actor_before_death callback, to ensure all objects are properly destroyed
+        // this will bypass below if block and go to normal KillEntity routine.
         if (bypass_actor_check == false)
         {
             Actor()->callback(GameObject::eActorBeforeDeath)(whoID);
             return;
         }
+        //-AVO
 #endif
-    //-AVO
-        Actor()->detach_Vehicle();
-        Actor()->use_MountedWeapon(nullptr);
     }
     if (whoID != ID())
     {
 #ifdef DEBUG
         if (m_killer_id != ALife::_OBJECT_ID(-1))
         {
-            Msg("! Entity [%s][%s] already has killer with id %d, but new killer id arrived - %d", *cNameSect(),
-                *cName(), m_killer_id, whoID);
+            Msg("! Entity [%s][%s] already has killer with id %d, but new killer id arrived - %d", cNameSect().c_str(),
+                cName().c_str(), m_killer_id, whoID);
 
             IGameObject* old_killer = Level().Objects.net_Find(m_killer_id);
-            Msg("! Old killer is %s", old_killer ? *old_killer->cName() : "unknown");
+            Msg("! Old killer is %s", old_killer ? old_killer->cName().c_str() : "unknown");
 
             IGameObject* new_killer = Level().Objects.net_Find(whoID);
-            Msg("! New killer is %s", new_killer ? *new_killer->cName() : "unknown");
+            Msg("! New killer is %s", new_killer ? new_killer->cName().c_str() : "unknown");
 
             VERIFY(m_killer_id == ALife::_OBJECT_ID(-1));
         }
@@ -318,8 +317,7 @@ void CEntity::reinit() { inherited::reinit(); }
 void CEntity::reload(LPCSTR section)
 {
     inherited::reload(section);
-    if (!use_simplified_visual())
-        CDamageManager::reload(section, "damage", pSettings);
+    CDamageManager::reload(section, "damage", pSettings);
 }
 
 void CEntity::set_death_time()

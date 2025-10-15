@@ -6,8 +6,9 @@
 #include "Layers/xrRender/stats_manager.h"
 
 #include <SDL.h>
-#include <SDL_syswm.h>
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class CHW
     : public pureAppActivate,
       public pureAppDeactivate
@@ -36,7 +37,7 @@ public:
         return SelectFormat(feature, formats, count);
     }
     bool UsingFlipPresentationModel() const;
-    DeviceState GetDeviceState() const;
+    DeviceState GetDeviceState();
 
 public:
     void BeginScene();
@@ -48,7 +49,7 @@ public:
     void OnAppDeactivate() override;
 
 private:
-    void CreateSwapChain(HWND hwnd);
+    bool CreateSwapChain(HWND hwnd);
     bool CreateSwapChain2(HWND hwnd);
 
     bool ThisInstanceIsGlobal() const;
@@ -82,7 +83,7 @@ public:
     bool SAD4ShaderInstructions;
     bool ExtendedDoublesShaderInstructions;
 
-    ID3DDeviceContext *d3d_contexts_pool[R__NUM_CONTEXTS];
+    ID3DDeviceContext* d3d_contexts_pool[R__NUM_CONTEXTS]{};
 
     bool DX10Only = false;
 #ifdef HAS_DX11_2
@@ -99,11 +100,14 @@ public:
 #if !defined(_MAYA_EXPORT)
     stats_manager stats_manager;
 #endif
+    TracyD3D11Ctx profiler_ctx{}; // TODO: this should be one per d3d11 context
 private:
     DXGI_SWAP_CHAIN_DESC m_ChainDesc; // DevPP equivalent
+    bool doPresentTest{};
     XRay::Module hD3DCompiler;
     XRay::Module hDXGI;
     XRay::Module hD3D;
 };
 
 extern ECORE_API CHW HW;
+} // namespace xray::render::RENDER_NAMESPACE

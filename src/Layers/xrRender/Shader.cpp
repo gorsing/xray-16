@@ -7,6 +7,9 @@
 
 #include "Shader.h"
 #include "ResourceManager.h"
+
+namespace xray::render::RENDER_NAMESPACE
+{
 // XXX: render scripts should call these destructors before resource manager gets destroyed
 STextureList::~STextureList() { RImplementation.Resources->_DeleteTextureList(this); }
 SMatrixList::~SMatrixList() { RImplementation.Resources->_DeleteMatrixList(this); }
@@ -31,7 +34,7 @@ void resptrcode_geom::create(u32 FVF, VertexBufferHandle vb, IndexBufferHandle i
     _set(RImplementation.Resources->CreateGeom(FVF, vb, ib));
 }
 
-void resptrcode_geom::create(VertexElement* decl, VertexBufferHandle vb, IndexBufferHandle ib)
+void resptrcode_geom::create(const VertexElement* decl, VertexBufferHandle vb, IndexBufferHandle ib)
 {
     _set(RImplementation.Resources->CreateGeom(decl, vb, ib));
 }
@@ -48,19 +51,16 @@ bool SPass::equal(const SPass& other) const
         return false;
     if (vs != other.vs)
         return false;
-#if defined(USE_DX11) || defined(USE_OGL)
     if (gs != other.gs)
         return false;
-#    ifdef USE_DX11
+#ifdef USE_DX11
     if (hs != other.hs)
         return false;
     if (ds != other.ds)
         return false;
     if (cs != other.cs)
         return false;
-#    endif
-#endif // USE_DX11 || USE_OGL
-#ifdef USE_OGL
+#elif defined(USE_OGL)
     if (pp != other.pp)
         return false;
 #endif
@@ -165,3 +165,4 @@ void STextureList::create_texture(u32 stage, pcstr textureName, bool overrideIfE
         }
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

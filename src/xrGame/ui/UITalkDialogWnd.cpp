@@ -15,7 +15,6 @@
 #include "alife_registry_wrappers.h"
 #include "UIHelper.h"
 
-
 CUITalkDialogWnd::CUITalkDialogWnd()
     : CUIWindow("CUITalkDialogWnd"),
       m_uiXml(nullptr),
@@ -38,9 +37,9 @@ CUITalkDialogWnd::~CUITalkDialogWnd() { xr_delete(m_uiXml); }
 
 void CUITalkDialogWnd::InitTalkDialogWnd()
 {
-    constexpr pcstr TALK_XML = "talk.xml";
-    constexpr pcstr TALK_CHARACTER_XML = "talk_character.xml";
-    constexpr cpcstr TRADE_CHARACTER_XML = "trade_character.xml";
+    static constexpr pcstr TALK_XML = "talk.xml";
+    static constexpr pcstr TALK_CHARACTER_XML = "talk_character.xml";
+    static constexpr cpcstr TRADE_CHARACTER_XML = "trade_character.xml";
 
     m_uiXml = xr_new<CUIXml>();
     m_uiXml->Load(CONFIG_PATH, UI_PATH, UI_PATH_DEFAULT, TALK_XML);
@@ -156,10 +155,14 @@ void CUITalkDialogWnd::Show()
     inherited::Enable(true);
 
     ResetAll();
+
+    UI().Focus().LockToWindow(UIQuestionsList);
 }
 
 void CUITalkDialogWnd::Hide()
 {
+    if (UI().Focus().GetLocker() == UIQuestionsList)
+        UI().Focus().Unlock();
     InventoryUtilities::SendInfoToActor("ui_talk_hide");
     InventoryUtilities::SendInfoToLuaScripts("ui_talk_hide");
     inherited::Show(false);
@@ -209,16 +212,18 @@ void CUITalkDialogWnd::AddQuestion(LPCSTR str, LPCSTR value, int number, bool b_
     ++number; // zero-based index
     if (number <= 10)
     {
-        string16 buff;
-        xr_sprintf(buff, "%d.", (number == 10) ? 0 : number);
         if (itm->m_num_text)
+        {
+            string16 buff;
+            xr_sprintf(buff, "%d.", (number == 10) ? 0 : number);
             itm->m_num_text->SetText(buff);
-        itm->m_text->SetAccelerator(SDL_SCANCODE_1 - 1 + number, 0);
+        }
+        itm->m_text->SetAccelerator(SDL_SCANCODE_1 - 1 + number, true, 0);
     }
     if (b_finalizer)
     {
-        itm->m_text->SetAccelerator(kQUIT, 2); // XXX: DON'T USE 2, instead use SDL_SCANCODE_*
-        itm->m_text->SetAccelerator(kUSE, 3);
+        itm->m_text->SetAccelerator(kUI_BACK, false, 2);
+        itm->m_text->SetAccelerator(kUSE, false, 3);
     }
 
     itm->SetWindowName("question_item");
@@ -236,8 +241,7 @@ void CUITalkDialogWnd::AddAnswer(LPCSTR SpeakerName, LPCSTR str, bool bActor)
     GAME_NEWS_DATA news_data;
     news_data.news_caption = SpeakerName;
 
-    xr_string res;
-    res = "%c[250,255,232,208]";
+    xr_string res = "%c[250,255,232,208]";
     res += str;
     news_data.news_text = res.c_str();
 
@@ -247,7 +251,7 @@ void CUITalkDialogWnd::AddAnswer(LPCSTR SpeakerName, LPCSTR str, bool bActor)
     news_data.texture_name = ci.IconName();
     news_data.receive_time = Level().GetGameTime();
 
-    Actor()->game_news_registry->registry().objects().push_back(news_data);
+    Actor()->game_news_registry->registry().objects().emplace_back(std::move(news_data));
 }
 
 void CUITalkDialogWnd::AddIconedAnswer(LPCSTR caption, LPCSTR text, LPCSTR texture_name, LPCSTR templ_name)
@@ -265,7 +269,7 @@ void CUITalkDialogWnd::AddIconedAnswer(LPCSTR caption, LPCSTR text, LPCSTR textu
     news_data.texture_name = texture_name;
     news_data.receive_time = Level().GetGameTime();
 
-    Actor()->game_news_registry->registry().objects().push_back(news_data);
+    Actor()->game_news_registry->registry().objects().emplace_back(std::move(news_data));
 }
 
 void CUITalkDialogWnd::AddIconedAnswer(pcstr text, pcstr texture_name, Frect texture_rect, pcstr templ_name)
@@ -283,7 +287,7 @@ void CUITalkDialogWnd::AddIconedAnswer(pcstr text, pcstr texture_name, Frect tex
     news_data.texture_name = texture_name;
     news_data.receive_time = Level().GetGameTime();
 
-    Actor()->game_news_registry->registry().objects().push_back(news_data);
+    Actor()->game_news_registry->registry().objects().emplace_back(std::move(news_data));
 }
 
 void CUITalkDialogWnd::SetOsoznanieMode(bool b)
@@ -341,9 +345,88 @@ void CUITalkDialogWnd::UpdateButtonsLayout(bool b_disable_break, bool trade_enab
 void CUITalkDialogWnd::TryScrollAnswersList(bool down)
 {
     if (down)
-        UIAnswersList->ScrollBar()->TryScrollDec();
-    else
         UIAnswersList->ScrollBar()->TryScrollInc();
+    else
+        UIAnswersList->ScrollBar()->TryScrollDec();
+}
+
+void CUITalkDialogWnd::FocusOnNextQuestion(bool next, bool loop) const
+{
+    auto& focus = UI().Focus();
+
+    const auto focused = focus.GetFocused();
+
+    if (auto questionItem = focused ? dynamic_cast<CUIQuestionItem*>(focused->GetParent()) : nullptr)
+    {
+        const Fvector2 vec = focused->GetAbsoluteCenterPos();
+        const auto direction = next ? FocusDirection::Down : FocusDirection::Up;
+
+        auto [candidate, candidate2] = focus.FindClosestFocusable(vec, direction);
+        if (!candidate)
+            candidate = candidate2;
+
+        questionItem = candidate ? dynamic_cast<CUIQuestionItem*>(candidate->GetParent()) : nullptr;
+
+        if (questionItem)
+        {
+            focus.SetFocused(candidate);
+        }
+        else if (loop)
+        {
+            if (next)
+                FocusOnFirstQuestion();
+            else
+                FocusOnLastQuestion();
+        }
+        return;
+    }
+
+    // Failed to find something, let's try first
+    FocusOnFirstQuestion();
+}
+
+void CUITalkDialogWnd::FocusOnFirstQuestion() const
+{
+    const auto questions = UIQuestionsList->Items();
+    if (questions.empty())
+        return;
+
+    const auto questionItem = dynamic_cast<CUIQuestionItem*>(questions.front());
+    if (!questionItem)
+        return;
+
+    UI().Focus().SetFocused(questionItem->m_text);
+}
+
+void CUITalkDialogWnd::FocusOnLastQuestion() const
+{
+    const auto questions = UIQuestionsList->Items();
+    if (questions.empty())
+        return;
+
+    const auto questionItem = dynamic_cast<CUIQuestionItem*>(questions.back());
+    if (!questionItem)
+        return;
+
+    UI().Focus().SetFocused(questionItem->m_text);
+}
+
+bool CUITalkDialogWnd::OnKeyboardAction(int dik, EUIMessages keyboard_action)
+{
+    if (keyboard_action == WINDOW_KEY_PRESSED)
+    {
+        const auto focused = UIQuestionsList->CursorOverWindow() ? UI().Focus().GetFocused() : nullptr;
+
+        if (focused && IsBinded(kUI_ACCEPT, dik, EKeyContext::UI))
+        {
+            if (const auto questionItem = dynamic_cast<CUIQuestionItem*>(focused->GetParent()))
+            {
+                questionItem->OnTextClicked(nullptr, nullptr);
+                return true;
+            }
+        }
+    }
+    return CUIWindow::OnKeyboardAction(dik, keyboard_action);
 }
 
 void CUIQuestionItem::SendMessage(CUIWindow* pWnd, s16 msg, void* pData) { CUIWndCallback::OnEvent(pWnd, msg, pData); }
@@ -363,7 +446,7 @@ CUIQuestionItem::CUIQuestionItem(CUIXml* xml_doc, LPCSTR path)
     AddCallback(m_text, BUTTON_CLICKED, CUIWndCallback::void_function(this, &CUIQuestionItem::OnTextClicked));
 
     strconcat(sizeof(str), str, path, ":num_text");
-    m_num_text = UIHelper::CreateTextWnd(*xml_doc, str, this, false);
+    m_num_text = UIHelper::CreateStatic(*xml_doc, str, this, false);
 }
 
 void CUIQuestionItem::Init(LPCSTR val, LPCSTR text)
@@ -391,10 +474,10 @@ CUIAnswerItem::CUIAnswerItem(CUIXml* xml_doc, LPCSTR path)
     string512 str;
 
     strconcat(sizeof(str), str, path, ":content_text");
-    m_text = UIHelper::CreateTextWnd(*xml_doc, str, this);
+    m_text = UIHelper::CreateStatic(*xml_doc, str, this);
 
     strconcat(sizeof(str), str, path, ":name_caption");
-    m_name = UIHelper::CreateTextWnd(*xml_doc, str, this);
+    m_name = UIHelper::CreateStatic(*xml_doc, str, this);
 
     SetAutoDelete(true);
 }

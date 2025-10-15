@@ -114,7 +114,7 @@ public:
     IC void SetMovementType(const MonsterSpace::EMovementType tMovementType);
     IC void SetPathType(const DetailPathManager::EDetailPathType tPathType);
     void SetObjectToGo(CScriptGameObject* tpObjectToGo);
-    IC void SetPatrolPath(const CPatrolPath* path, shared_str path_name);
+    IC void SetPatrolPath(const CPatrolPath* path, const shared_str& path_name);
     IC void SetPosition(const Fvector& tPosition);
     IC void SetSpeed(float fSpeed);
     IC void SetPatrolStart(EPatrolStartType tPatrolPathStart);
@@ -122,6 +122,9 @@ public:
     IC void SetPatrolRandom(bool bRandom);
     IC void SetInputKeys(const EInputKeys tInputKeys);
     IC void initialize();
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 };
 
 #include "script_movement_action_inline.h"

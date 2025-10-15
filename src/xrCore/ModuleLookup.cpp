@@ -24,6 +24,8 @@ ModuleHandle::~ModuleHandle()
 
 void* ModuleHandle::Open(pcstr moduleName)
 {
+    ZoneScoped;
+
     if (IsLoaded())
         Close();
 
@@ -32,10 +34,10 @@ void* ModuleHandle::Open(pcstr moduleName)
     xr_string buf(moduleName);
 #ifdef XR_PLATFORM_WINDOWS
     buf += ".dll";
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD)
-    buf += ".so";
 #elif defined(XR_PLATFORM_APPLE)
     buf += ".dylib";
+#elif defined(XR_PLATFORM_POSIX) // assume .so for POSIX platforms
+    buf += ".so";
 #else
 #error add your platform-specific extension here
 #endif
@@ -64,7 +66,9 @@ void* ModuleHandle::Open(pcstr moduleName)
 
 void ModuleHandle::Close()
 {
-    if (dontUnload)
+    ZoneScoped;
+
+    if (dontUnload || !handle)
         return;
 
 #if defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD)

@@ -35,8 +35,8 @@ void CUIStaticItem::RenderInternal(const Fvector2& in_pos)
     UI().AlignPixel(pos.x);
     UI().AlignPixel(pos.y);
 
-    Fvector2 ts;
-    GEnv.UIRender->GetActiveTextureResolution(ts);
+    Fvector2 ts{};
+    hShader->GetBaseTextureResolution(ts);
 
     if (!uFlags.test(flValidSize))
         SetSize(ts);
@@ -55,6 +55,12 @@ void CUIStaticItem::RenderInternal(const Fvector2& in_pos)
     //текстурные координаты
     LTt.set(TextureRect.x1 / ts.x, TextureRect.y1 / ts.y);
     RBt.set(TextureRect.x2 / ts.x, TextureRect.y2 / ts.y);
+
+    // Check mirror mode
+    if (EUIMirroring::Horisontal == eMirrorMode || EUIMirroring::Both == eMirrorMode)
+        std::swap(LTt.x, RBt.x);
+    if (EUIMirroring::Vertical == eMirrorMode || EUIMirroring::Both == eMirrorMode)
+        std::swap(LTt.y, RBt.y);
 
     float offset = -0.5f;
     if (UI().m_currentPointType == IUIRender::pttLIT)
@@ -100,11 +106,10 @@ void CUIStaticItem::RenderInternal(const Fvector2& in_pos)
 
 void CUIStaticItem::RenderInternal(float angle)
 {
-    Fvector2 ts;
-    Fvector2 hp;
+    Fvector2 ts{};
+    hShader->GetBaseTextureResolution(ts);
 
-    GEnv.UIRender->GetActiveTextureResolution(ts);
-    hp.set(0.5f / ts.x, 0.5f / ts.y);
+    const Fvector2 hp{ 0.5f / ts.x, 0.5f / ts.y };
 
     if (!uFlags.test(flValidSize))
         SetSize(ts);
@@ -130,6 +135,12 @@ void CUIStaticItem::RenderInternal(float angle)
     Fvector2 LTt, RBt;
     LTt.set(TextureRect.x1 / ts.x + hp.x, TextureRect.y1 / ts.y + hp.y);
     RBt.set(TextureRect.x2 / ts.x + hp.x, TextureRect.y2 / ts.y + hp.y);
+
+    // Check mirror mode
+    if (EUIMirroring::Horisontal == eMirrorMode || EUIMirroring::Both == eMirrorMode)
+        std::swap(LTt.x, RBt.x);
+    if (EUIMirroring::Vertical == eMirrorMode || EUIMirroring::Both == eMirrorMode)
+        std::swap(LTt.y, RBt.y);
 
     float kx = UI().get_current_kx();
 
@@ -197,10 +208,6 @@ void CUIStaticItem::Render(float angle)
 void CUIStaticItem::CreateShader(LPCSTR tex, LPCSTR sh)
 {
     hShader->create(sh, tex);
-
-#ifdef DEBUG
-    dbg_tex_name = tex;
-#endif
     uFlags.set(flValidSize, FALSE);
     uFlags.set(flValidTextureRect, FALSE);
 }

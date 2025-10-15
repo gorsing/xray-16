@@ -8,7 +8,10 @@
 #include "SkeletonX.h"
 #include "SkeletonXSkinXW.h"
 #include "xrCore/FMesh.hpp"
+#include "xrCDB/Intersect.hpp"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 shared_str s_bones_array_const;
 
 //////////////////////////////////////////////////////////////////////
@@ -98,11 +101,11 @@ void CSkeletonX::_Render_soft(CBackend& cmd_list, ref_geom& hGeom, u32 vCount, u
 {
     u32 vOffset = cache_vOffset;
 
-    _VertexStream& _VS = RImplementation.Vertex;
-    if (cache_DiscardID != _VS.DiscardID() || vCount != cache_vCount)
+    _VertexStream& vstream = RImplementation.Vertex;
+    if (cache_DiscardID != vstream.DiscardID() || vCount != cache_vCount)
     {
-        vertRender* Dest = (vertRender*)_VS.Lock(vCount, hGeom->vb_stride, vOffset);
-        cache_DiscardID = _VS.DiscardID();
+        vertRender* Dest = (vertRender*)vstream.Lock(vCount, hGeom->vb_stride, vOffset);
+        cache_DiscardID = vstream.DiscardID();
         cache_vCount = vCount;
         cache_vOffset = vOffset;
 
@@ -143,7 +146,7 @@ void CSkeletonX::_Render_soft(CBackend& cmd_list, ref_geom& hGeom, u32 vCount, u
             R_ASSERT2(0, "unsupported soft rendering");
 
         RImplementation.BasicStats.Skinning.End();
-        _VS.Unlock(vCount, hGeom->vb_stride);
+        vstream.Unlock(vCount, hGeom->vb_stride);
     }
 
     cmd_list.set_Geometry(hGeom);
@@ -412,7 +415,7 @@ void get_pos_bones(const vertBoned4W& vert, Fvector& p, CKinematics* Parent)
 //-----------------------------------------------------------------------------------------------------
 // Wallmarks
 //-----------------------------------------------------------------------------------------------------
-#include "xrCDB/Intersect.hpp"
+
 BOOL CSkeletonX::_PickBoneSoft1W(IKinematics::pick_result& r, float dist, const Fvector& S, const Fvector& D,
     u16* indices, CBoneData::FacesVec& faces)
 {
@@ -662,3 +665,4 @@ void CSkeletonX::_FillVerticesSoft4W(const Fmatrix& view, CSkeletonWallmark& wm,
         }
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

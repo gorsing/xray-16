@@ -5,6 +5,11 @@
 #include "xrEngine/GameFont.h"
 #include "xrCore/Text/StringConversion.hpp"
 
+extern ENGINE_API bool g_bRendering;
+extern ENGINE_API Fvector2 g_current_font_scale;
+
+namespace xray::render::RENDER_NAMESPACE
+{
 dxFontRender::~dxFontRender()
 {
     pShader.destroy();
@@ -16,9 +21,6 @@ void dxFontRender::Initialize(cpcstr cShader, cpcstr cTexture)
     pShader.create(cShader, cTexture);
     pGeom.create(FVF::F_TL, RImplementation.Vertex.Buffer(), RImplementation.QuadIB);
 }
-
-extern ENGINE_API bool g_bRendering;
-extern ENGINE_API Fvector2 g_current_font_scale;
 
 void dxFontRender::OnRender(CGameFont& owner)
 {
@@ -92,15 +94,16 @@ void dxFontRender::OnRender(CGameFont& owner)
                 case CGameFont::alRight: X -= iFloor(fSize); break;
                 }
 
-                u32 clr, clr2;
-                clr2 = clr = PS.c;
+                const u32 clr = PS.c;
+                u32 clr2 = PS.c;
+
                 if (owner.uFlags & CGameFont::fsGradient)
                 {
-                    u32 _R = color_get_R(clr) / 2;
-                    u32 _G = color_get_G(clr) / 2;
-                    u32 _B = color_get_B(clr) / 2;
-                    u32 _A = color_get_A(clr);
-                    clr2 = color_rgba(_R, _G, _B, _A);
+                    const u32 r = color_get_R(clr) / 2;
+                    const u32 g = color_get_G(clr) / 2;
+                    const u32 b = color_get_B(clr) / 2;
+                    const u32 a = color_get_A(clr);
+                    clr2 = color_rgba(r, g, b, a);
                 }
 
 #ifndef USE_DX9 // Vertex shader will cancel a DX9 correction, so make fake offset
@@ -186,11 +189,6 @@ inline void dxFontRender::ImprintChar(Fvector l, const CGameFont& owner, FVF::TL
         //float tv = (l.y / owner.vTS.y) + (0.5f / owner.vTS.y);
         float tu = (l.x / owner.vTS.x);
         float tv = (l.y / owner.vTS.y);
-#ifdef USE_DX9
-        //  Make half pixel offset for 1 to 1 mapping
-        tu += (0.5f / owner.vTS.x);
-        tv += (0.5f / owner.vTS.y);
-#endif // USE_DX9
 
         v->set(X, Y2, clr2, tu, tv + owner.fTCHeight);
         v++;
@@ -209,3 +207,4 @@ inline void dxFontRender::ImprintChar(Fvector l, const CGameFont& owner, FVF::TL
             X += owner.fXStep;
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

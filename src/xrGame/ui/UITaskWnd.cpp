@@ -1,6 +1,7 @@
 #include "StdAfx.h"
 #include "UITaskWnd.h"
 #include "UIMapWnd.h"
+#include "UIMapFilters.h"
 #include "Common/object_broker.h"
 #include "UIXmlInit.h"
 #include "xrUICore/Static/UIStatic.h"
@@ -20,19 +21,7 @@
 #include "Actor.h"
 #include "xrUICore/Buttons/UICheckButton.h"
 
-CUITaskWnd::CUITaskWnd(UIHint* hint)
-    : CUIWindow("CUITaskWnd"),
-      m_background(nullptr), m_background2(nullptr),
-      m_center_background(nullptr), m_right_bottom_background(nullptr),
-      m_task_split(nullptr), m_pMapWnd(nullptr),
-      m_pStoryLineTaskItem(nullptr), m_pSecondaryTaskItem(nullptr),
-      m_BtnTaskListWnd(nullptr), m_second_task_index(nullptr),
-      m_devider(nullptr), m_actual_frame(0),
-      m_btn_focus(nullptr), m_btn_focus2(nullptr),
-      m_task_wnd(nullptr), m_task_wnd_show(false),
-      m_map_legend_wnd(nullptr), hint_wnd(hint)
-{
-}
+CUITaskWnd::CUITaskWnd(UIHint* hint) : CUIWindow("CUITaskWnd"), hint_wnd(hint) {}
 
 CUITaskWnd::~CUITaskWnd() { delete_data(m_pMapWnd); }
 
@@ -46,29 +35,18 @@ bool CUITaskWnd::Init()
 
     CUIXmlInit::InitWindow(xml, "main_wnd", 0, this);
 
-    m_background = UIHelper::CreateFrameWindow(xml, "background", this, false);
-    m_background2 = UIHelper::CreateFrameLine(xml, "background", this, false);
+    std::ignore = UIHelper::CreateFrameWindow(xml, "background", this, false);
+    std::ignore = UIHelper::CreateFrameLine(xml, "background", this, false);
 
-    m_task_split = UIHelper::CreateFrameLine(xml, "task_split", this, false);
+    std::ignore = UIHelper::CreateFrameLine(xml, "task_split", this, false);
 
-    constexpr std::tuple<eSpotsFilter, pcstr> filters[] =
+    m_filters = xr_new<CUIMapFilters>();
+    if (!m_filters->Init(xml))
+        xr_delete(m_filters);
+    else
     {
-        { eSpotsFilterTreasures,        "filter_treasures" },
-        { eSpotsFilterQuestNpcs,        "filter_primary_objects" },
-        { eSpotsFilterSecondaryTasks,   "filter_secondary_tasks" },
-        { eSpotsFilterPrimaryObjects,   "filter_quest_npcs" },
-    };
-
-    for (const auto& [filter_id, filter_section] : filters)
-    {
-        auto& filter = m_filters[filter_id];
-        filter = UIHelper::CreateCheck(xml, filter_section, this, false);
-        if (filter)
-        {
-            filter->SetCheck(true);
-            AddCallback(filter, BUTTON_CLICKED, void_function(this, &CUITaskWnd::OnMapSpotFilterClicked));
-        }
-        m_filters_state[filter_id] = true;
+        AttachChild(m_filters);
+        m_filters->SetMessageTarget(this);
     }
 
     m_pMapWnd = xr_new<CUIMapWnd>(hint_wnd);
@@ -77,7 +55,7 @@ bool CUITaskWnd::Init()
     AttachChild(m_pMapWnd);
 
     m_center_background = UIHelper::CreateStatic(xml, "center_background", this);
-    m_devider = UIHelper::CreateStatic(xml, "line_devider", this, false);
+    std::ignore = UIHelper::CreateStatic(xml, "line_devider", this, false);
 
     m_pStoryLineTaskItem = xr_new<CUITaskItem>();
     m_pStoryLineTaskItem->Init(xml, "storyline_task_item");
@@ -110,8 +88,10 @@ bool CUITaskWnd::Init()
         //m_btn_focus2->set_hint_wnd(hint_wnd);
     }
 
-    m_BtnTaskListWnd = UIHelper::Create3tButton(xml, "btn_second_task", this);
-    AddCallback(m_BtnTaskListWnd, BUTTON_CLICKED, CUIWndCallback::void_function(this, &CUITaskWnd::OnShowTaskListWnd));
+    auto* btnTaskListWnd = UIHelper::Create3tButton(xml, "btn_second_task", this);
+    AddCallback(btnTaskListWnd, BUTTON_CLICKED, CUIWndCallback::void_function(this, &CUITaskWnd::OnShowTaskListWnd));
+    btnTaskListWnd->SetAccelerator(kSCORES, false, 2);
+    btnTaskListWnd->SetAccelerator(kUI_ACTION_1, false, 3);
 
     m_second_task_index = UIHelper::CreateStatic(xml, "second_task_index", this, false);
 
@@ -119,11 +99,11 @@ bool CUITaskWnd::Init()
     m_task_wnd->SetAutoDelete(true);
     m_task_wnd->hint_wnd = hint_wnd;
     m_task_wnd->init_from_xml(xml, "second_task_wnd");
+    m_task_wnd->ShowOnlySecondaryTasks(m_pSecondaryTaskItem != nullptr);
 
     m_pMapWnd->AttachChild(m_task_wnd);
     m_task_wnd->SetMessageTarget(this);
     m_task_wnd->Show(false);
-    m_task_wnd_show = false;
 
     m_map_legend_wnd = xr_new<UIMapLegend>();
     m_map_legend_wnd->SetAutoDelete(true);
@@ -161,88 +141,31 @@ void CUITaskWnd::Update()
 void CUITaskWnd::Draw() { inherited::Draw(); }
 void CUITaskWnd::DrawHint() { m_pMapWnd->DrawHint(); }
 
-void CUITaskWnd::DropFilterSelection()
-{
-    m_selected_filter = -1;
-    GetUICursor().WarpToWindow(nullptr, pInput->IsCurrentInputTypeController());
-}
-
 bool CUITaskWnd::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 {
-    if (keyboard_action == WINDOW_KEY_PRESSED)
-    {
-        if (IsBinded(kPDA_FILTER_TOGGLE, dik, EKeyContext::PDA) && m_selected_filter == -1)
-        {
-            m_selected_filter = 0;
-            GetUICursor().WarpToWindow(m_filters[m_selected_filter]);
-            GetUICursor().PauseAutohiding(true);
-            return true;
-        }
-
-        if (m_selected_filter >= 0)
-        {
-            if (IsBinded(kQUIT, dik))
-            {
-                DropFilterSelection();
-                return false; // allow PDA to hide
-            }
-
-            switch (GetBindedAction(dik, EKeyContext::UI))
-            {
-            case kUI_BACK:
-                DropFilterSelection();
-                return true;
-
-            case kUI_ACCEPT:
-                m_filters[m_selected_filter]->OnMouseDown(MOUSE_1);
-                return true;
-
-            case kUI_MOVE_LEFT:
-            case kUI_MOVE_DOWN:
-                if (m_selected_filter > 0)
-                    m_selected_filter--;
-                else
-                    m_selected_filter = int(m_filters.size() - 1);
-                break;
-
-            case kUI_MOVE_RIGHT:
-            case kUI_MOVE_UP:
-                if (m_selected_filter < int(m_filters.size() - 1))
-                    m_selected_filter++;
-                else
-                    m_selected_filter = 0;
-                break;
-            } // switch (GetBindedAction(dik, EKeyContext::UI))
-
-            if (IsBinded(kPDA_FILTER_TOGGLE, dik, EKeyContext::PDA))
-            {
-                DropFilterSelection();
-                return true;
-            }
-
-            GetUICursor().WarpToWindow(m_filters[m_selected_filter]);
-            return true;
-        }
-    }
-
+    if (m_pKeyboardCapturer && pInput->IsCurrentInputTypeController())
+        return m_pKeyboardCapturer->OnKeyboardAction(dik, keyboard_action);
     return inherited::OnKeyboardAction(dik, keyboard_action);
 }
 
-bool CUITaskWnd::OnControllerAction(int axis, float x, float y, EUIMessages controller_action)
+bool CUITaskWnd::OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action)
 {
-    switch (GetBindedAction(axis, EKeyContext::UI))
-    {
-    default:
-        return OnKeyboardAction(axis, controller_action);
-    case kUI_MOVE:
-        if (m_selected_filter >= 0)
-            return true; // just screw it for now
-    }
-    return inherited::OnControllerAction(axis, x, y, controller_action);
+    if (m_pKeyboardCapturer && pInput->IsCurrentInputTypeController())
+        return m_pKeyboardCapturer->OnControllerAction(axis, state, controller_action);
+    return inherited::OnControllerAction(axis, state, controller_action);
 }
 
 void CUITaskWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
 {
+    if (msg == WINDOW_KEYBOARD_CAPTURE_LOST && pWnd == this)
+    {
+        if ((m_filters && pData == m_filters) || pData == m_task_wnd)
+        {
+            if (pInput->IsCurrentInputTypeController())
+                UI().GetUICursor().WarpToWindow(m_pMapWnd, true);
+            return;
+        }
+    }
     if (msg == PDA_TASK_SET_TARGET_MAP && pData)
     {
         CGameTask* task = static_cast<CGameTask*>(pData);
@@ -261,7 +184,6 @@ void CUITaskWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
         TaskShowMapSpot(task, false);
         return;
     }
-
     if (msg == PDA_TASK_SHOW_HINT && pData)
     {
         CGameTask* task = static_cast<CGameTask*>(pData);
@@ -271,6 +193,11 @@ void CUITaskWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
     if (msg == PDA_TASK_HIDE_HINT)
     {
         m_pMapWnd->HideCurHint();
+        return;
+    }
+    if (msg == PDA_TASK_RELOAD_FILTERS)
+    {
+        ReloadTaskInfo();
         return;
     }
 
@@ -290,14 +217,14 @@ void CUITaskWnd::ReloadTaskInfo()
         m_pSecondaryTaskItem->InitTask(additionalTask);
     }
 
-    if (!storyTask || (storyTask->m_map_object_id == u16(-1) || storyTask->m_map_location.size() == 0))
+    if (!storyTask || (storyTask->m_map_object_id == u16(-1) || storyTask->m_map_location.empty()))
         m_btn_focus->Show(false);
     else
         m_btn_focus->Show(true);
 
     if (m_btn_focus2)
     {
-        if (!additionalTask || (additionalTask->m_map_object_id == u16(-1) || additionalTask->m_map_location.size() == 0))
+        if (!additionalTask || (additionalTask->m_map_object_id == u16(-1) || additionalTask->m_map_location.empty()))
             m_btn_focus2->Show(false);
         else
             m_btn_focus2->Show(true);
@@ -381,31 +308,51 @@ void CUITaskWnd::Show(bool status)
     if (status)
     {
         ReloadTaskInfo();
-        m_task_wnd->Show(m_task_wnd_show);
-    }
-    else
-    {
-        //m_task_wnd_show = false;
-        m_task_wnd->Show(false);
     }
 }
 
-void CUITaskWnd::Reset() { inherited::Reset(); }
-void CUITaskWnd::OnNextTaskClicked() {}
-void CUITaskWnd::OnPrevTaskClicked() {}
-void CUITaskWnd::OnShowTaskListWnd(CUIWindow* w, void* d)
+void CUITaskWnd::OnShowTaskListWnd(CUIWindow* w, void* d) const
 {
-    m_task_wnd_show = !m_task_wnd_show;
     m_task_wnd->Show(!m_task_wnd->IsShown());
 }
 
-void CUITaskWnd::Show_TaskListWnd(bool status)
+void CUITaskWnd::Show_TaskListWnd(bool status) const
 {
     m_task_wnd->Show(status);
-    m_task_wnd_show = status;
 }
 
-void CUITaskWnd::TaskSetTargetMap(CGameTask* task)
+bool CUITaskWnd::IsTreasuresEnabled() const { return !m_filters || m_filters->IsFilterEnabled(CUIMapFilters::Treasures); }
+bool CUITaskWnd::IsQuestNpcsEnabled() const { return !m_filters || m_filters->IsFilterEnabled(CUIMapFilters::QuestNpcs); }
+bool CUITaskWnd::IsSecondaryTasksEnabled() const { return !m_filters || m_filters->IsFilterEnabled(CUIMapFilters::SecondaryTasks); }
+bool CUITaskWnd::IsPrimaryObjectsEnabled() const { return !m_filters || m_filters->IsFilterEnabled(CUIMapFilters::PrimaryObjects); }
+
+void CUITaskWnd::TreasuresEnabled(bool enable)
+{
+    if (m_filters)
+        m_filters->SetFilterEnabled(CUIMapFilters::Treasures, enable);
+}
+void CUITaskWnd::QuestNpcsEnabled(bool enable)
+{
+    if (m_filters)
+        m_filters->SetFilterEnabled(CUIMapFilters::QuestNpcs, enable);
+}
+void CUITaskWnd::SecondaryTasksEnabled(bool enable)
+{
+    if (m_filters)
+        m_filters->SetFilterEnabled(CUIMapFilters::SecondaryTasks, enable);
+}
+void CUITaskWnd::PrimaryObjectsEnabled(bool enable)
+{
+    if (m_filters)
+        m_filters->SetFilterEnabled(CUIMapFilters::PrimaryObjects, enable);
+}
+
+bool CUITaskWnd::IsUsingCursorRightNow() const
+{
+    return true;
+}
+
+void CUITaskWnd::TaskSetTargetMap(CGameTask* task) const
 {
     if (!task || !IsSecondaryTasksEnabled())
     {
@@ -456,23 +403,10 @@ void CUITaskWnd::OnTask2DbClicked(CUIWindow*, void*)
     TaskSetTargetMap(task);
 }
 
-void CUITaskWnd::ShowMapLegend(bool status) const { m_map_legend_wnd->Show(status); }
 void CUITaskWnd::Switch_ShowMapLegend() const { m_map_legend_wnd->Show(!m_map_legend_wnd->IsShown()); }
 
-void CUITaskWnd::OnMapSpotFilterClicked(CUIWindow* ui, void* d)
-{
-    for (u32 i = 0; i < eSpotsFilter_Count; ++i)
-    {
-        if (m_filters[i] == ui)
-            m_filters_state[i] = m_filters[i]->GetCheck();
-    }
-    ReloadTaskInfo();
-}
-
 // --------------------------------------------------------------------------------------------------
-CUITaskItem::CUITaskItem()
-    : CUIWindow("CUITaskItem"),
-      m_owner(nullptr), show_hint_can(false), show_hint(false), m_hint_wt(500) {}
+CUITaskItem::CUITaskItem() : CUIWindow("CUITaskItem"), m_hint_wt(500) {}
 
 void CUITaskItem::Init(CUIXml& uiXml, LPCSTR path)
 {
@@ -482,7 +416,7 @@ void CUITaskItem::Init(CUIXml& uiXml, LPCSTR path)
     const auto init = [&](pcstr name, bool critical = true)
     {
         string256 buff;
-        strconcat(sizeof(buff), buff, path, ":", name);
+        strconcat(buff, path, ":", name);
         m_info[name] = UIHelper::CreateStatic(uiXml, buff, this, critical);
     };
 
@@ -541,7 +475,7 @@ void CUITaskItem::Update()
     inherited::Update();
     if (m_owner && m_bCursorOverWindow && show_hint_can)
     {
-        if (Device.dwTimeGlobal > (m_dwFocusReceiveTime + m_hint_wt))
+        if (Device.dwTimeGlobal > (m_dwFocusReceiveTime + m_hint_wt * Device.time_factor()))
         {
             show_hint = true;
             return;

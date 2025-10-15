@@ -104,7 +104,7 @@ CUISequencer::CUISequencer()
 bool CUISequencer::Start(LPCSTR tutor_name)
 {
     VERIFY(m_sequencer_items.empty());
-    
+
     CUIXml uiXml;
     uiXml.Load(CONFIG_PATH, UI_PATH, UI_PATH_DEFAULT, "game_tutorials.xml");
 
@@ -150,7 +150,7 @@ bool CUISequencer::Start(LPCSTR tutor_name)
     if (snd_name && snd_name[0])
     {
         m_global_sound.create(snd_name, st_Effect, sg_Undefined);
-        VERIFY(m_global_sound._handle() || strstr(Core.Params, "-nosound"));
+        VERIFY(m_global_sound._handle() || !Engine.Sound.IsSoundEnabled());
     }
     m_start_lua_function = uiXml.Read("function_on_start", 0, "");
     m_stop_lua_function = uiXml.Read("function_on_stop", 0, "");
@@ -293,6 +293,8 @@ void CUISequencer::Stop()
 
 void CUISequencer::OnFrame()
 {
+    ZoneScoped;
+
     if (!Device.b_is_Active)
         return;
     if (!IsActive())
@@ -323,6 +325,8 @@ void CUISequencer::OnFrame()
 
 void CUISequencer::OnRender()
 {
+    ZoneScoped;
+
     if (m_UIWindow->IsShown())
         m_UIWindow->Draw();
 
@@ -395,7 +399,7 @@ void CUISequencer::IR_OnKeyboardHold(int dik)
         m_pStoredInputReceiver->IR_OnKeyboardHold(dik);
 }
 
-void CUISequencer::IR_OnMouseWheel(int x, int y)
+void CUISequencer::IR_OnMouseWheel(float x, float y)
 {
     if (!GrabInput() && m_pStoredInputReceiver)
         m_pStoredInputReceiver->IR_OnMouseWheel(x, y);
@@ -403,14 +407,14 @@ void CUISequencer::IR_OnMouseWheel(int x, int y)
 
 void CUISequencer::IR_OnKeyboardPress(int dik)
 {
-    if (m_sequencer_items.size())
+    CUISequenceItem* item = m_sequencer_items.empty() ? nullptr : m_sequencer_items.front();
+
+    if (item)
         m_sequencer_items.front()->OnKeyboardPress(dik);
 
-    bool b = true;
-    if (m_sequencer_items.size())
-        b &= m_sequencer_items.front()->AllowKey(dik);
+    const bool b = item ? item->AllowKey(dik) : true;
 
-    bool binded = IsBinded(kQUIT, dik);
+    const bool binded = IsBinded(kQUIT, dik) || IsBinded(kUI_BACK, dik, EKeyContext::UI);
     if (b && binded)
     {
         Stop();
@@ -437,16 +441,16 @@ void CUISequencer::IR_OnKeyboardPress(int dik)
         m_pStoredInputReceiver->IR_OnKeyboardPress(dik);
 }
 
-void CUISequencer::IR_OnControllerPress(int key, float x, float y)
+void CUISequencer::IR_OnControllerPress(int key, const ControllerAxisState& state)
 {
-    if (m_sequencer_items.size())
-        m_sequencer_items.front()->OnControllerPress(key);
+    CUISequenceItem* item = m_sequencer_items.empty() ? nullptr : m_sequencer_items.front();
 
-    bool b = true;
-    if (m_sequencer_items.size())
-        b &= m_sequencer_items.front()->AllowKey(key);
+    if (item)
+        m_sequencer_items.front()->OnKeyboardPress(key);
 
-    bool binded = IsBinded(kQUIT, key);
+    const bool b = item ? item->AllowKey(key) : true;
+
+    const bool binded = IsBinded(kQUIT, key) || IsBinded(kUI_BACK, key, EKeyContext::UI);
     if (b && binded)
     {
         Stop();
@@ -470,19 +474,19 @@ void CUISequencer::IR_OnControllerPress(int key, float x, float y)
     }
 
     if (b && !GrabInput() && m_pStoredInputReceiver)
-        m_pStoredInputReceiver->IR_OnControllerPress(key, x, y);
+        m_pStoredInputReceiver->IR_OnControllerPress(key, state);
 }
 
-void CUISequencer::IR_OnControllerRelease(int key, float x, float y)
+void CUISequencer::IR_OnControllerRelease(int key, const ControllerAxisState& state)
 {
     if (!GrabInput() && m_pStoredInputReceiver)
-        m_pStoredInputReceiver->IR_OnControllerRelease(key, x, y);
+        m_pStoredInputReceiver->IR_OnControllerRelease(key, state);
 }
 
-void CUISequencer::IR_OnControllerHold(int key, float x, float y)
+void CUISequencer::IR_OnControllerHold(int key, const ControllerAxisState& state)
 {
     if (!GrabInput() && m_pStoredInputReceiver)
-        m_pStoredInputReceiver->IR_OnControllerHold(key, x, y);
+        m_pStoredInputReceiver->IR_OnControllerHold(key, state);
 }
 
 void CUISequencer::IR_OnActivate()

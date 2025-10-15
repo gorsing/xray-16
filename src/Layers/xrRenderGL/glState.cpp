@@ -1,6 +1,8 @@
 #include "stdafx.h"
 #include "glState.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 glState::glState()
 {
     // Clear the sampler array
@@ -256,8 +258,8 @@ void glState::UpdateSamplerState(u32 stage, u32 name, u32 value)
         CHK_GL(glSamplerParameteri(m_samplerArray[stage], GL_TEXTURE_MAX_LEVEL, value));
         break;
     case D3DSAMP_MAXANISOTROPY: /* DWORD maximum anisotropy */
-        if (GLEW_EXT_texture_filter_anisotropic)
-            CHK_GL(glSamplerParameteri(m_samplerArray[stage], GL_TEXTURE_MAX_ANISOTROPY_EXT, value));
+        if (GLAD_GL_ARB_texture_filter_anisotropic || GLAD_GL_EXT_texture_filter_anisotropic)
+            CHK_GL(glSamplerParameteri(m_samplerArray[stage], GL_TEXTURE_MAX_ANISOTROPY, value));
         break;
     case XRDX11SAMP_COMPARISONFILTER:
         CHK_GL(glSamplerParameteri(m_samplerArray[stage], GL_TEXTURE_COMPARE_MODE, value ? (GLint)
@@ -271,3 +273,4 @@ void glState::UpdateSamplerState(u32 stage, u32 name, u32 value)
         break;
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

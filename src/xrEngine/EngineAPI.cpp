@@ -4,32 +4,16 @@
 //////////////////////////////////////////////////////////////////////
 
 #include "stdafx.h"
+
 #include "EngineAPI.h"
 #include "XR_IOConsole.h"
 
-#include "xrCore/ModuleLookup.hpp"
 #include "xrCore/xr_token.h"
 
 #include "xrScriptEngine/ScriptExporter.hpp"
+#include "xrScriptEngine/script_space.hpp"
 
 extern xr_vector<xr_token> VidQualityToken;
-
-constexpr pcstr GET_RENDERER_MODULE_FUNC = "GetRendererModule";
-
-constexpr pcstr r1_library     = "xrRender_R1";
-constexpr pcstr gl_library     = "xrRender_GL";
-
-constexpr pcstr RENDER_LIBRARIES[] =
-{
-#if defined(XR_PLATFORM_WINDOWS)
-    r1_library,
-    "xrRender_R2",
-    "xrRender_R4",
-#endif
-    gl_library
-};
-
-static bool r2_available = false;
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -64,160 +48,120 @@ bool is_enough_address_space_available()
 #endif
 }
 
-pcstr CEngineAPI::SelectRenderer()
+void CEngineAPI::SelectRenderer()
 {
-    cpcstr selected_mode = Console->GetString("renderer");
-    const auto it = renderModes.find(selected_mode);
+    ZoneScoped;
+
+    // User has some renderer selected, find it
+    pcstr selected_mode = Console->GetString("renderer");
+    const auto it = std::find_if(renderModes.begin(), renderModes.end(), [selected_mode](const auto& pair)
+    {
+        return xr_strcmp(selected_mode, pair.first) == 0;
+    });
+
+    // Check if we can use it
     if (it != renderModes.end())
     {
-        selectedRenderer = it->second;
+        if (it->second->CheckGameRequirements())
+            selectedRenderer = it->second;
     }
-    return selected_mode;
-}
 
-void CEngineAPI::InitializeRenderers()
-{
-    pcstr selected_mode = SelectRenderer();
-
-    if (selectedRenderer == nullptr
-        && VidQualityToken[0].id != -1)
+    // Renderer is either fully unsupported (hardware)
+    // or we don't comply with it's requirements (e.g. shaders missing)
+    if (!selectedRenderer)
     {
-        // if engine failed to load renderer
-        // but there is at least one available
-        // then try again
-        string64 buf;
-        xr_sprintf(buf, "renderer %s", VidQualityToken[0].name);
-        Console->Execute(buf);
-
-        // Second attempt
-        selected_mode = SelectRenderer();
+        // Select any suitable
+        for (const auto& [mode, renderer] : renderModes)
+        {
+            if (renderer->CheckGameRequirements())
+            {
+                selectedRenderer = renderer;
+                selected_mode = mode;
+                string64 buf;
+                xr_sprintf(buf, "renderer %s", selected_mode);
+                Console->Execute(buf);
+                break;
+            }
+        }
     }
+
+    R_ASSERT2(selectedRenderer, "Can't setup renderer");
 
     // Ask current renderer to setup GEnv
-    R_ASSERT2(selectedRenderer, "Can't setup renderer");
     selectedRenderer->SetupEnv(selected_mode);
-    
+
     Log("Selected renderer:", selected_mode);
 }
 
-void CEngineAPI::Initialize(void)
+void CEngineAPI::Initialize(GameModule* game)
 {
-    InitializeRenderers();
+    ZoneScoped;
 
-    hGame = XRay::LoadModule("xrGame");
-    if (!CanSkipGameModuleLoading())
+    SelectRenderer();
+
+    if (game)
     {
-        R_ASSERT2(hGame->IsLoaded(), "! Game DLL raised exception during loading or there is no game DLL at all");
-
-        pCreate = (Factory_Create*)hGame->GetProcAddress("xrFactory_Create");
+        gameModule = game;
+        gameModule->initialize(pCreate, pDestroy);
         R_ASSERT(pCreate);
-
-        pDestroy = (Factory_Destroy*)hGame->GetProcAddress("xrFactory_Destroy");
         R_ASSERT(pDestroy);
-
-        pInitializeGame = (InitializeGameLibraryProc)hGame->GetProcAddress("initialize_library");
-        R_ASSERT(pInitializeGame);
-
-        pFinalizeGame = (FinalizeGameLibraryProc)hGame->GetProcAddress("finalize_library");
-        R_ASSERT(pFinalizeGame);
-    	
-        pInitializeGame();
     }
-
-    CloseUnusedLibraries();
 }
 
-void CEngineAPI::Destroy(void)
+void CEngineAPI::Destroy()
 {
-    if (pFinalizeGame)
-        pFinalizeGame();
-	
-    pInitializeGame = nullptr;
-    pFinalizeGame = nullptr;
+    ZoneScoped;
+
+    if (gameModule)
+        gameModule->finalize();
+
+    selectedRenderer = nullptr;
+
     pCreate = nullptr;
     pDestroy = nullptr;
-	
-    hGame = nullptr;
-	
-    renderers.clear();
-    Engine.Event._destroy();
+
     XRC.r_clear_compact();
 }
 
-void CEngineAPI::CloseUnusedLibraries()
-{
-    for (RendererDesc& desc : renderers)
-    {
-        if (desc.module != selectedRenderer)
-            desc.handle = nullptr;
-    }
-}
-
-void CEngineAPI::CreateRendererList()
+void CEngineAPI::CreateRendererList(const std::array<RendererModule*, 2>& modules)
 {
     if (!VidQualityToken.empty())
         return;
 
-    const auto loadLibrary = [&](pcstr library) -> bool
-    {
-        auto handle = XRay::LoadModule(library);
-        if (!handle->IsLoaded())
-            return false;
+    ZoneScoped;
 
-        const auto getModule = (GetRendererModule)handle->GetProcAddress(GET_RENDERER_MODULE_FUNC);
-        RendererModule* module = getModule ? getModule() : nullptr;
+    const auto loadRenderer = [this](RendererModule* module) -> bool
+    {
         if (!module)
             return false;
 
-        renderers.emplace_back(RendererDesc({ library, std::move(handle), module }));
+        const auto& modes = module->ObtainSupportedModes(); // Performs HW tests, may take time
+        if (modes.empty())
+            return false;
+
+        for (const auto [mode, modeIndex] : modes)
+        {
+            const auto it = renderModes.find(mode);
+            if (it != renderModes.end())
+            {
+                VERIFY3(false, "Renderer mode duplicate. Skipping.", mode);
+                continue;
+            }
+            renderModes[mode] = module;
+            VidQualityToken.emplace_back(mode, modeIndex);
+        }
+
         return true;
     };
 
     if (GEnv.isDedicatedServer)
     {
-#if defined(XR_PLATFORM_WINDOWS)
-        R_ASSERT2(loadLibrary(r1_library), "Dedicated server needs xrRender_R1 to work");
-#else
-        R_ASSERT2(loadLibrary(gl_library), "Dedicated server needs xrRender_GL to work");
-#endif
+        R_ASSERT2(loadRenderer(modules[0]), "Dedicated server needs xrRender to work");
     }
     else
     {
-        for (pcstr library : RENDER_LIBRARIES)
-        {
-            if (loadLibrary(library) && library != r1_library)
-                r2_available = true;
-        }
-    }
-
-    int modeIndex{};
-    const auto obtainModes = [&](RendererModule* module)
-    {
-        if (module)
-        {
-            const auto& modes = module->ObtainSupportedModes();
-            for (pcstr mode : modes)
-            {
-                const auto it = std::find_if(renderModes.begin(), renderModes.end(), [&](auto& pair)
-                {
-                    return 0 == xr_strcmp(mode, pair.first.c_str());
-                });
-                string256 temp;
-                if (it != renderModes.end())
-                {
-                    xr_sprintf(temp, "%s__dup%d", mode, modeIndex);
-                    mode = temp;
-                }
-                shared_str copiedMode = mode;
-                renderModes[copiedMode] = module;
-                VidQualityToken.emplace_back(copiedMode.c_str(), modeIndex++); // It's important to have postfix increment!
-            }
-        }
-    };
-
-    for (RendererDesc& desc : renderers)
-    {
-        obtainModes(desc.module);
+        for (const auto& module : modules)
+            loadRenderer(module);
     }
 
     auto& modes = VidQualityToken;
@@ -230,11 +174,18 @@ void CEngineAPI::CreateRendererList()
     modes.emplace_back(nullptr, -1);
 }
 
-SCRIPT_EXPORT(CheckRendererSupport, (),
+struct CEngineAPIExport
+{
+    // Not in CEngineAPI directly due to linking problems with xrCDB
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
+};
+
+void CEngineAPIExport::script_register(lua_State* luaState)
 {
     using namespace luabind;
     module(luaState)
     [
-        def("xrRender_test_r2_hw", +[](){ return r2_available; })
+        def("is_enough_address_space_available", &is_enough_address_space_available),
+        def("xrRender_test_r2_hw", +[](){ return true; })
     ];
-});
+}

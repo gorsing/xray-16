@@ -12,7 +12,6 @@
 #include "Effector.h"
 #include "EffectorPP.h"
 
-#include "x_ray.h"
 #include "GameFont.h"
 #include "Render.h"
 
@@ -170,6 +169,7 @@ void CCameraManager::UpdateFromCamera(const CCameraBase* C)
 void CCameraManager::Update(const Fvector& P, const Fvector& D, const Fvector& N, float fFOV_Dest, float fASPECT_Dest,
     float fFAR_Dest, u32 flags)
 {
+    ZoneScoped;
 #ifdef DEBUG
     if (!Device.Paused())
     {
@@ -251,7 +251,7 @@ void CCameraManager::UpdateCamEffectors()
         else
         {
             // Dereferencing reverse iterator returns previous element of the list, r_it.base() returns current element
-            // So, we should use base()-1 iterator to delete just processed element. 'Previous' element would be 
+            // So, we should use base()-1 iterator to delete just processed element. 'Previous' element would be
             // automatically changed after deletion, so r_it would dereferencing to another value, no need to change it
             OnEffectorReleased(*r_it);
             auto r_to_del = r_it.base();
@@ -314,6 +314,7 @@ void CCameraManager::UpdatePPEffectors()
 
 void CCameraManager::ApplyDevice()
 {
+    ZoneScoped;
     // Device params
     Device.mView.build_camera_dir(m_cam_info.p, m_cam_info.d, m_cam_info.n);
 
@@ -326,7 +327,7 @@ void CCameraManager::ApplyDevice()
     Device.fFOV = m_cam_info.fFov;
     Device.fASPECT = m_cam_info.fAspect;
     Device.mProject.build_projection(deg2rad(m_cam_info.fFov), m_cam_info.fAspect, m_cam_info.fNear, m_cam_info.fFar);
-    
+
     // Apply offset required for Nvidia Ansel
     Device.mProject._31 = -m_cam_info.offsetX;
     Device.mProject._32 = -m_cam_info.offsetY;
@@ -337,58 +338,33 @@ void CCameraManager::ApplyDevice()
     {
         pp_affected.validate("apply device");
         // postprocess
-        IRender_Target* T = GEnv.Render->getTarget();
-        T->set_duality_h(pp_affected.duality.h);
-        T->set_duality_v(pp_affected.duality.v);
-        T->set_blur(pp_affected.blur);
-        T->set_gray(pp_affected.gray);
-        T->set_noise(pp_affected.noise.intensity);
-
         clamp(pp_affected.noise.grain, EPS_L, 1000.0f);
-
-        T->set_noise_scale(pp_affected.noise.grain);
-
-        T->set_noise_fps(pp_affected.noise.fps);
-        T->set_color_base(pp_affected.color_base);
-        T->set_color_gray(pp_affected.color_gray);
-        T->set_color_add(pp_affected.color_add);
-
-        T->set_cm_imfluence(pp_affected.cm_influence);
-        T->set_cm_interpolate(pp_affected.cm_interpolate);
-        T->set_cm_textures(pp_affected.cm_tex1, pp_affected.cm_tex2);
+        GEnv.Render->SetPostProcessParams(pp_affected);
     }
 }
 
 void CCameraManager::ResetPP()
 {
-    IRender_Target* T = GEnv.Render->getTarget();
-    T->set_duality_h(pp_identity.duality.h);
-    T->set_duality_v(pp_identity.duality.v);
-    T->set_blur(pp_identity.blur);
-    T->set_gray(pp_identity.gray);
-    T->set_noise(pp_identity.noise.intensity);
-    T->set_noise_scale(pp_identity.noise.grain);
-    T->set_noise_fps(pp_identity.noise.fps);
-    T->set_color_base(pp_identity.color_base);
-    T->set_color_gray(pp_identity.color_gray);
-    T->set_color_add(pp_identity.color_add);
-    T->set_cm_imfluence(0.0f);
-    T->set_cm_interpolate(1.0f);
-    T->set_cm_textures("", "");
+    SPPInfo params = pp_identity;
+    params.cm_influence = 0.0f;
+    params.cm_interpolate = 1.0f;
+    params.cm_tex1 = "";
+    params.cm_tex2 = "";
+    GEnv.Render->SetPostProcessParams(params);
 }
 
 void CCameraManager::Dump()
 {
     Fmatrix mInvCamera;
-    Fvector _R, _U, _T, _P;
-
     mInvCamera.invert(Device.mView);
-    _R.set(mInvCamera._11, mInvCamera._12, mInvCamera._13);
-    _U.set(mInvCamera._21, mInvCamera._22, mInvCamera._23);
-    _T.set(mInvCamera._31, mInvCamera._32, mInvCamera._33);
-    _P.set(mInvCamera._41, mInvCamera._42, mInvCamera._43);
-    Log("CCameraManager::Dump::vPosition = ", _P);
-    Log("CCameraManager::Dump::vDirection = ", _T);
-    Log("CCameraManager::Dump::vNormal = ", _U);
-    Log("CCameraManager::Dump::vRight = ", _R);
+
+    const Fvector right{ mInvCamera._11, mInvCamera._12, mInvCamera._13 };
+    const Fvector normal{ mInvCamera._21, mInvCamera._22, mInvCamera._23 };
+    const Fvector direction{ mInvCamera._31, mInvCamera._32, mInvCamera._33 };
+    const Fvector position{ mInvCamera._41, mInvCamera._42, mInvCamera._43 };
+
+    Log("CCameraManager::Dump::vPosition = ", position);
+    Log("CCameraManager::Dump::vDirection = ", direction);
+    Log("CCameraManager::Dump::vNormal = ", normal);
+    Log("CCameraManager::Dump::vRight = ", right);
 }

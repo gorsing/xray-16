@@ -22,6 +22,7 @@ public:
     virtual bool IsChangedOptValue() const; // backup!=current
 
     virtual bool OnKeyboardAction(int dik, EUIMessages keyboard_action);
+    bool OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action) override;
     virtual void OnTabChange(const shared_str& sCur, const shared_str& sPrev);
     virtual void OnStaticFocusReceive(CUIWindow* pWnd);
     virtual void OnStaticFocusLost(CUIWindow* pWnd);
@@ -49,10 +50,12 @@ public:
     void SetActiveTabByIndex(u32 index);
     bool SetNextActiveTab(bool next, bool loop);
 
-    const u32 GetTabsCount() const { return m_TabsArr.size(); }
+    u32 GetTabsCount() const { return m_TabsArr.size(); }
 
     // Режим клавилатурных акселераторов (вкл/выкл)
-    IC bool GetAcceleratorsMode() const { return m_bAcceleratorsEnable; }
+    bool GetButtonsAcceleratorsMode() const { return m_bButtonsAcceleratorsEnable; }
+    void SetButtonsAcceleratorsMode(bool bEnable) { m_bButtonsAcceleratorsEnable = bEnable; }
+    bool GetAcceleratorsMode() const { return m_bAcceleratorsEnable; }
     void SetAcceleratorsMode(bool bEnable) { m_bAcceleratorsEnable = bEnable; }
 
     TABS_VECTOR* GetButtonsVector() { return &m_TabsArr; }
@@ -73,13 +76,17 @@ protected:
     shared_str m_sPrevPushedId;
 
     // Цвет неактивных элементов
-    u32 m_cGlobalTextColor;
-    u32 m_cGlobalButtonColor;
+    u32 m_cGlobalTextColor{ 0xFFFFFFFF };
+    u32 m_cGlobalButtonColor{ 0xFFFFFFFF };
 
     // Цвет надписи на активном элементе
-    u32 m_cActiveTextColor;
-    u32 m_cActiveButtonColor;
+    u32 m_cActiveTextColor{ 0xFFFFFFFF };
+    u32 m_cActiveButtonColor{ 0xFFFFFFFF };
 
-    bool m_bAcceleratorsEnable;
+    bool m_bAcceleratorsEnable{ false }; // Tab control itself accelerators
+    bool m_bButtonsAcceleratorsEnable{ true }; // Tab buttons own accelerators
     shared_str m_opt_backup_value;
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CUIWindow);
 };

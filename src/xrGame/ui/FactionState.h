@@ -6,6 +6,7 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #pragma once
+
 #include "xrUICore/Windows/UIWindow.h"
 
 class FactionState
@@ -82,7 +83,7 @@ public:
 
 private:
 	int				m_actor_goodwill;
-	
+
 	shared_str		m_id;
 	shared_str		m_name;
 	shared_str		m_icon;
@@ -95,6 +96,8 @@ private:
 	shared_str		m_war_state_str[war_state_count];
 	shared_str		m_war_state_hint_str[war_state_count];
 
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 }; // struct FactionState
 
 #include "FactionState_inline.h"

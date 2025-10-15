@@ -9,23 +9,14 @@
 #include "shared_data.h"
 #include "xml_str_id_loader.h"
 
-#ifdef XRGAME_EXPORTS
-
 #include "PhraseDialogDefs.h"
 #include "character_community.h"
-
-#endif
 
 //////////////////////////////////////////////////////////////////////////
 // SSpecificCharacterData: данные о конкретном персонаже
 //////////////////////////////////////////////////////////////////////////
 struct SSpecificCharacterData : CSharedResource
 {
-#ifdef XRGAME_EXPORTS
-
-    SSpecificCharacterData();
-    virtual ~SSpecificCharacterData();
-
     //игровое имя персонажа
     xr_string m_sGameName;
     //текст с биографией персонажа (линк на string table)
@@ -37,19 +28,17 @@ struct SSpecificCharacterData : CSharedResource
     //имя секции конфигурации звука для NPC персонажа
     xr_string m_sound_voice_prefix;
 
-    float m_fPanic_threshold;
-    float m_fHitProbabilityFactor;
-    int m_crouch_type;
-    bool m_upgrade_mechanic;
+    float m_fPanic_threshold{};
+    float m_fHitProbabilityFactor{ 1.f };
+    int m_crouch_type{};
+    bool m_upgrade_mechanic{};
 
     xr_string m_critical_wound_weights;
-#endif
+
     shared_str m_terrain_sect;
 
     //имя модели
     xr_string m_sVisual;
-
-#ifdef XRGAME_EXPORTS
 
     //начальный диалог
     shared_str m_StartDialog;
@@ -60,12 +49,10 @@ struct SSpecificCharacterData : CSharedResource
     //команда
     CHARACTER_COMMUNITY m_Community;
 
-#endif
-
     //ранг
-    CHARACTER_RANK_VALUE m_Rank;
+    CHARACTER_RANK_VALUE m_Rank{ NO_RANK };
     //репутация
-    CHARACTER_REPUTATION_VALUE m_Reputation;
+    CHARACTER_REPUTATION_VALUE m_Reputation{ NO_REPUTATION };
 
     //классы персонажа (военные-ветераны, ученые и т.д.)
     //к которым он принадлежит
@@ -73,10 +60,10 @@ struct SSpecificCharacterData : CSharedResource
 
     //указание на то что персонаж не предназначен для случайного выбора
     //и задается только через явное указание ID
-    bool m_bNoRandom;
+    bool m_bNoRandom{};
     //если персонаж является заданым по умолчанию для своей команды
-    bool m_bDefaultForCommunity;
-#ifdef XRGAME_EXPORTS
+    bool m_bDefaultForCommunity{};
+
     struct SMoneyDef
     {
         u32 min_money;
@@ -84,7 +71,6 @@ struct SSpecificCharacterData : CSharedResource
         bool inf_money;
     };
     SMoneyDef money_def;
-#endif
 };
 
 class CInventoryOwner;
@@ -104,9 +90,6 @@ private:
     friend CSE_ALifeTraderAbstract;
 
 public:
-    CSpecificCharacter();
-    ~CSpecificCharacter();
-
     virtual void Load(shared_str id);
 
 protected:
@@ -128,18 +111,15 @@ protected:
     shared_str m_OwnId;
 
 public:
-#ifdef XRGAME_EXPORTS
     LPCSTR Name() const;
     shared_str Bio() const;
     const CHARACTER_COMMUNITY& Community() const;
     SSpecificCharacterData::SMoneyDef& MoneyDef() { return data()->money_def; }
-#endif
 
     CHARACTER_RANK_VALUE Rank() const;
     CHARACTER_REPUTATION_VALUE Reputation() const;
     LPCSTR Visual() const;
 
-#ifdef XRGAME_EXPORTS
     LPCSTR SupplySpawn() const;
     LPCSTR NpcConfigSect() const;
     LPCSTR sound_voice_prefix() const;
@@ -150,7 +130,7 @@ public:
     LPCSTR critical_wound_weights() const;
 
     const shared_str& IconName() const { return data()->m_icon_name; };
-#endif
+
     shared_str terrain_sect() const;
 };
 

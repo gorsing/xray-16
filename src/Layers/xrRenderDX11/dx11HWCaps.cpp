@@ -9,6 +9,8 @@
 #include <ags_lib/inc/amd_ags.h>
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 namespace
 {
 #if !defined(_EDITOR)
@@ -113,7 +115,7 @@ u32 GetATIGpuNum()
 
     const u32 crossfireGpuCount = returnedParams.crossfireGPUCount;
     agsDriverExtensionsDX11_DestroyDevice(ags, returnedParams.pDevice, nullptr, returnedParams.pImmediateContext, nullptr);
-    
+
     Msg("* AMD AGS: %d-Way CrossFire detected.", crossfireGpuCount);
     agsDeInitialize(ags);
     return crossfireGpuCount;
@@ -242,3 +244,4 @@ void CHWCaps::Update()
 
     iGPUNum = GetGpuNum();
 }
+} // namespace xray::render::RENDER_NAMESPACE

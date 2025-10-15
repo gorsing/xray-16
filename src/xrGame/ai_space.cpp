@@ -28,6 +28,7 @@ CAI_Space& CAI_Space::GetInstance()
 {
     if (!g_ai_space)
     {
+        ZoneScopedN("Create AI Space");
         g_ai_space = xr_new<CAI_Space>();
         g_ai_space->init();
     }
@@ -36,6 +37,8 @@ CAI_Space& CAI_Space::GetInstance()
 
 void CAI_Space::init()
 {
+    ZoneScoped;
+
     R_ASSERT(!m_inited);
 
     if (!GEnv.isDedicatedServer)
@@ -47,7 +50,7 @@ void CAI_Space::init()
         m_moving_objects = xr_make_unique<::moving_objects>();
 
         VERIFY(!GEnv.ScriptEngine);
-        GEnv.ScriptEngine = xr_new<CScriptEngine>();
+        GEnv.ScriptEngine = xr_new<CScriptEngine>(false, true);
         RestartScriptEngine();
     }
 
@@ -56,6 +59,8 @@ void CAI_Space::init()
 
 CAI_Space::~CAI_Space()
 {
+    ZoneScoped;
+
     if (GEnv.ScriptEngine != nullptr)
     {
         m_events_notifier.FireEvent(EVENT_SCRIPT_ENGINE_RESET);
@@ -67,6 +72,8 @@ CAI_Space::~CAI_Space()
 
 void CAI_Space::RegisterScriptClasses()
 {
+    ZoneScoped;
+
 #ifdef DBG_DISABLE_SCRIPTS
     return;
 #else
@@ -81,11 +88,11 @@ void CAI_Space::RegisterScriptClasses()
     }
     shared_str registrators = READ_IF_EXISTS(l_tpIniFile, r_string, "common", "class_registrators", "");
     xr_delete(l_tpIniFile);
-    u32 registratorCount = _GetItemCount(*registrators);
+    u32 registratorCount = _GetItemCount(registrators.c_str());
     string256 I;
     for (u32 i = 0; i < registratorCount; i++)
     {
-        _GetItem(*registrators, i, I);
+        _GetItem(registrators.c_str(), i, I);
         luabind::functor<void> result;
         if (!GEnv.ScriptEngine->functor(I, result))
         {
@@ -99,6 +106,8 @@ void CAI_Space::RegisterScriptClasses()
 
 void CAI_Space::LoadCommonScripts()
 {
+    ZoneScoped;
+
 #ifdef DBG_DISABLE_SCRIPTS
     return;
 #else
@@ -114,11 +123,11 @@ void CAI_Space::LoadCommonScripts()
     if (l_tpIniFile->line_exist("common", "script"))
     {
         shared_str scriptString = l_tpIniFile->r_string("common", "script");
-        u32 scriptCount = _GetItemCount(*scriptString);
+        u32 scriptCount = _GetItemCount(scriptString.c_str());
         string256 scriptName;
         for (u32 i = 0; i < scriptCount; i++)
         {
-            _GetItem(*scriptString, i, scriptName);
+            _GetItem(scriptString.c_str(), i, scriptName);
             GEnv.ScriptEngine->load_file(scriptName, CScriptEngine::GlobalNamespace);
         }
     }
@@ -128,15 +137,22 @@ void CAI_Space::LoadCommonScripts()
 
 void CAI_Space::SetupScriptEngine()
 {
-    XRay::ScriptExporter::Reset(); // mark all nodes as undone
-    GEnv.ScriptEngine->init(XRay::ScriptExporter::Export, true);
+    ZoneScoped;
+
+    GEnv.ScriptEngine->init(xray::script_export::node::export_all, true);
     RegisterScriptClasses();
     object_factory().register_script();
     LoadCommonScripts();
+
+#ifndef MASTER_GOLD
+    g_object_factory->init_spawn_data();
+#endif
 }
 
 void CAI_Space::RestartScriptEngine()
 {
+    ZoneScoped;
+
     if (GEnv.ScriptEngine != nullptr)
     {
         m_events_notifier.FireEvent(EVENT_SCRIPT_ENGINE_RESET);
@@ -155,6 +171,8 @@ void CAI_Space::RestartScriptEngine()
 
 void CAI_Space::load(LPCSTR level_name)
 {
+    ZoneScoped;
+
     VERIFY(m_game_graph);
 
     unload(true);
@@ -181,6 +199,9 @@ void CAI_Space::unload(bool reload)
 {
     if (GEnv.isDedicatedServer)
         return;
+
+    ZoneScoped;
+
     GEnv.ScriptEngine->unload();
     m_doors_manager.reset(nullptr);
     AISpaceBase::Unload(reload);

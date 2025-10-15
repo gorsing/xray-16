@@ -1,24 +1,20 @@
 #include "stdafx.h"
 #pragma hdrstop
 
-#if defined(USE_DX11) || defined(USE_OGL)
+namespace xray::render::RENDER_NAMESPACE
+{
 extern IC u32 GetIndexCount(D3DPRIMITIVETYPE T, u32 iPrimitiveCount);
-#endif
 
 void CBackend::InitializeDebugDraw()
 {
-#ifndef USE_DX9
     vs_L.create(FVF::F_L, RImplementation.Vertex.Buffer(), RImplementation.Index.Buffer());
     vs_TL.create(FVF::F_TL, RImplementation.Vertex.Buffer(), RImplementation.Index.Buffer());
-#endif
 }
 
 void CBackend::DestroyDebugDraw()
 {
-#ifndef USE_DX9
     vs_L.destroy();
     vs_TL.destroy();
-#endif
 }
 
 void CBackend::dbg_DP(D3DPRIMITIVETYPE pt, ref_geom geom, u32 vBase, u32 pc)
@@ -35,9 +31,8 @@ void CBackend::dbg_DIP(D3DPRIMITIVETYPE pt, ref_geom geom, u32 baseV, u32 startV
 
 #ifdef DEBUG
 
-void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int vcnt, u16* pIdx, int pcnt)
+void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, u32 vcnt, u16* pIdx, int pcnt)
 {
-#ifndef USE_DX9
     u32 vBase;
     {
         FVF::L* pv = (FVF::L*)RImplementation.Vertex.Lock(vcnt, vs_L->vb_stride, vBase);
@@ -61,17 +56,9 @@ void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int vcnt, u16* pIdx,
     RImplementation.rmNormal(RCache);
     set_Stencil(FALSE);
     Render(T, vBase, 0, vcnt, iBase, pcnt);
-#elif defined(USE_DX9)
-    OnFrameEnd();
-    CHK_DX(HW.pDevice->SetFVF(FVF::F_L));
-    CHK_DX(HW.pDevice->DrawIndexedPrimitiveUP(T, 0, vcnt, pcnt, pIdx, D3DFMT_INDEX16, pVerts, sizeof(FVF::L)));
-#else
-#   error No graphics API selected or enabled!
-#endif
 }
 void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int pcnt)
 {
-#ifndef USE_DX9
     u32 vBase;
     {
         const size_t count = GetIndexCount(T, pcnt);
@@ -87,13 +74,6 @@ void CBackend::dbg_Draw(D3DPRIMITIVETYPE T, FVF::L* pVerts, int pcnt)
     RImplementation.rmFar(RCache);
     set_Stencil(FALSE);
     Render(T, vBase, pcnt);
-#elif defined(USE_DX9)
-    OnFrameEnd();
-    CHK_DX(HW.pDevice->SetFVF(FVF::F_L));
-    CHK_DX(HW.pDevice->DrawPrimitiveUP(T, pcnt, pVerts, sizeof(FVF::L)));
-#else
-#   error No graphics API selected or enabled!
-#endif
 }
 
 #define RGBA_GETALPHA(rgb) ((rgb) >> 24)
@@ -213,11 +193,11 @@ void CBackend::dbg_DrawEllipse(Fmatrix& T, u32 C)
         102, 113, 104, 103, 113, 105, 104, 113, 106, 105, 113, 107, 106, 113, 108, 107, 113, 109, 108, 113, 110, 109,
         113, 111, 110, 113, 112, 111, 113, 97, 112};
 
-    const int vcnt = sizeof(gVertices) / (sizeof(float) * 3);
+    const u32 vcnt = sizeof(gVertices) / (sizeof(float) * 3);
     FVF::L verts[vcnt];
-    for (int i = 0; i < vcnt; i++)
+    for (u32 i = 0; i < vcnt; i++)
     {
-        int k = i * 3;
+        u32 k = i * 3;
         verts[i].set(gVertices[k], gVertices[k + 1], gVertices[k + 2], C);
     }
 
@@ -256,28 +236,13 @@ void CBackend::dbg_OverdrawEnd()
     OnFrameEnd();
 
     // Draw a rectangle wherever the count equal I
-#if defined(USE_DX9)
-    CHK_DX(HW.pDevice->SetFVF(FVF::F_TL));
-#elif defined(USE_DX11) || defined(USE_OGL)
     set_Geometry(vs_TL);
-#else
-#   error No graphics API defined or enabled!
-#endif
 
     // Render gradients
     for (int I = 0; I < 12; I++)
     {
         u32 _c = I * 256 / 13;
         u32 c = color_xrgb(_c, _c, _c);
-#ifdef USE_DX9
-        FVF::TL pv[4];
-        pv[0].set(float(0), float(Device.dwHeight), c, 0, 0);
-        pv[1].set(float(0), float(0), c, 0, 0);
-        pv[2].set(float(Device.dwWidth), float(Device.dwHeight), c, 0, 0);
-        pv[3].set(float(Device.dwWidth), float(0), c, 0, 0);
-        CHK_DX(HW.pDevice->SetRenderState(D3DRS_STENCILREF, I));
-        CHK_DX(HW.pDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, pv, sizeof(FVF::TL)));
-#elif defined(USE_DX11) || defined(USE_OGL)
         u32 vBase;
         FVF::TL* pv = (FVF::TL*)RImplementation.Vertex.Lock(4, vs_L->vb_stride, vBase);
         pv[0].set(float(0), float(Device.dwHeight), c, 0, 0);
@@ -289,31 +254,17 @@ void CBackend::dbg_OverdrawEnd()
         set_Stencil(TRUE, D3DCMP_EQUAL, I, 0xff, 0xffffffff,
             D3DSTENCILOP_KEEP, D3DSTENCILOP_KEEP, D3DSTENCILOP_KEEP);
         Render(D3DPT_TRIANGLESTRIP, vBase, 4);
-#else
-#   error No graphics API defined or enabled!
-#endif
     }
     set_Stencil(FALSE);
 }
 
 void CBackend::dbg_SetRS(D3DRENDERSTATETYPE p1, u32 p2)
 {
-#ifdef USE_DX9
-    CHK_DX(HW.pDevice->SetRenderState(p1, p2));
-#elif defined(USE_DX11) || defined(USE_OGL)
     VERIFY(!"Not implemented");
-#else
-#   error No graphics API defined or enabled!
-#endif
 }
 
 void CBackend::dbg_SetSS(u32 sampler, D3DSAMPLERSTATETYPE type, u32 value)
 {
-#ifdef USE_DX9
-    CHK_DX(HW.pDevice->SetSamplerState(sampler, type, value));
-#elif defined(USE_DX11) || defined(USE_OGL)
     VERIFY(!"Not implemented");
-#else
-#   error No graphics API defined or enabled!
-#endif
 }
+} // namespace xray::render::RENDER_NAMESPACE

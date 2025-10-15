@@ -69,7 +69,9 @@ function load_dialog:InitControls()
 
 	self.picture			= xml:InitStatic("form:picture",self.form)
 
---	xml:InitStatic			("form:file_info",self.form)
+	if GetUIStyleManager():GetCurrentStyleName() == "ui_style_cs" then
+		xml:InitStatic		("form:file_info",self.form)
+	end
 
 	self.file_caption 		= xml:InitTextWnd("form:file_caption",self.form)
 	self.file_data			= xml:InitTextWnd("form:file_data",self.form)
@@ -317,16 +319,20 @@ function load_dialog:OnButton_del_clicked()
 end
 
 function load_dialog:OnKeyboard(dik, keyboard_action)  --virtual function
-	CUIScriptWnd.OnKeyboard(self,dik,keyboard_action)
+	if CUIScriptWnd.OnKeyboard(self,dik,keyboard_action) then
+		return true
+	end
 	local bind = dik_to_bind(dik)
 	if bind == key_bindings.kQUIT then
 		self:OnButton_back_clicked()
+		return true
 	else
 		if bind == key_bindings.kENTER and keyboard_action == ui_events.WINDOW_KEY_PRESSED then
 			self:OnButton_load_clicked()
+			return true
 		end
 	end
-	return true
+	return false
 end
 
 function load_dialog:AddItemToList(file_name, date_time)

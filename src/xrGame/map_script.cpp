@@ -1,9 +1,9 @@
 #include "pch_script.h"
+
 #include "map_location.h"
 #include "map_manager.h"
-#include "xrScriptEngine/ScriptExporter.hpp"
 
-SCRIPT_EXPORT(CMapManager, (),
+void CMapManager::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -15,9 +15,9 @@ SCRIPT_EXPORT(CMapManager, (),
             .def("RemoveMapLocation", (void (CMapManager::*)(CMapLocation*))&CMapManager::RemoveMapLocation)
             .def("DisableAllPointers", &CMapManager::DisableAllPointers)
     ];
-});
+}
 
-SCRIPT_EXPORT(CMapLocation, (),
+void CMapLocation::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -27,7 +27,10 @@ SCRIPT_EXPORT(CMapLocation, (),
             //.def(constructor<>())
             .def("HintEnabled", &CMapLocation::HintEnabled)
             .def("GetHint", &CMapLocation::GetHint)
-            .def("SetHint", &CMapLocation::SetHint)
+            .def("SetHint", +[](CMapLocation* self, pcstr hint)
+            {
+                self->SetHint(hint);
+            })
             .def("PointerEnabled", &CMapLocation::PointerEnabled)
             .def("EnablePointer", &CMapLocation::EnablePointer)
             .def("DisablePointer", &CMapLocation::DisablePointer)
@@ -39,9 +42,12 @@ SCRIPT_EXPORT(CMapLocation, (),
             .def("SpotEnabled", &CMapLocation::SpotEnabled)
             .def("EnableSpot", &CMapLocation::EnableSpot)
             .def("DisableSpot", &CMapLocation::DisableSpot)
-            .def("GetLevelName", &CMapLocation::GetLevelName)
+            .def("GetLevelName", +[](CMapLocation* self)
+            {
+                return self->GetLevelName().c_str();
+            })
             .def("GetPosition", &CMapLocation::GetPosition)
             .def("ObjectID", &CMapLocation::ObjectID)
             .def("GetLastPosition", &CMapLocation::GetLastPosition)
     ];
-});
+}

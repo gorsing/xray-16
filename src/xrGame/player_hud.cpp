@@ -7,11 +7,11 @@
 #include "static_cast_checked.hpp"
 #include "ActorEffector.h"
 #include "WeaponMagazinedWGrenade.h" // XXX: move somewhere
+#include "GamePersistent.h"
 
-extern u32 hud_adj_mode;
 player_hud* g_player_hud = nullptr;
+extern ENGINE_API shared_str current_player_hud_sect;
 
-// clang-format off
 // --#SM+# Begin--
 constexpr float PITCH_OFFSET_R    = 0.0f;   // Насколько сильно ствол смещается вбок (влево) при вертикальных поворотах камеры
 constexpr float PITCH_OFFSET_N    = 0.0f;   // Насколько сильно ствол поднимается\опускается при вертикальных поворотах камеры
@@ -22,14 +22,15 @@ constexpr float ORIGIN_OFFSET_AIM = -0.03f; // (Для прицеливания)
 constexpr float TENDTO_SPEED      = 5.f;    // Скорость нормализации положения ствола
 constexpr float TENDTO_SPEED_AIM  = 8.f;    // (Для прицеливания)
 // --#SM+# End--
-// clang-format on
 
-float CalcMotionSpeed(const shared_str& anim_name)
+float CalcMotionSpeed(const shared_str& anim_name, const float anim_speed)
 {
-    if (!IsGameTypeSingle() && (anim_name == "anm_show" || anim_name == "anm_hide"))
-        return 2.0f;
+    // Apply custom animation speeds / configuration only for singleplayer games.
+    // Fast reloading / showing / hiding animation does not seem fair.
+    if (IsGameTypeSingle())
+        return anim_speed;
     else
-        return 1.0f;
+        return (anim_name == "anm_show" || anim_name == "anm_hide") ? 2.0f : 1.0f;
 }
 
 const player_hud_motion* player_hud_motion_container::find_motion(const shared_str& name) const
@@ -53,16 +54,20 @@ void player_hud_motion_container::load(IKinematicsAnimated* model, const shared_
             {
                 pm.m_base_name = anm;
                 pm.m_additional_name = anm;
+                pm.m_anim_speed = 1.f;
             }
             else
             {
-                R_ASSERT2(_GetItemCount(anm.c_str()) == 2, anm.c_str());
+                R_ASSERT2(_GetItemCount(anm.c_str()) <= 3, anm.c_str());
                 string512 str_item;
                 _GetItem(anm.c_str(), 0, str_item);
                 pm.m_base_name = str_item;
 
                 _GetItem(anm.c_str(), 1, str_item);
-                pm.m_additional_name = str_item;
+                pm.m_additional_name = xr_strlen(str_item) > 0 ? str_item : pm.m_base_name;
+
+                _GetItem(anm.c_str(), 2, str_item);
+                pm.m_anim_speed = xr_strlen(str_item) > 0 ? atof(str_item) : 1.f;
             }
 
             // and load all motions for it
@@ -130,13 +135,13 @@ void attachable_hud_item::update(bool bForce)
     {
         reload_measures();
     }
-    
-    if (hud_adj_mode > 0)
+
+    if (GamePersistent().GetHudTuner().is_active())
         m_measures.update(m_attach_offset);
 
     m_parent->calc_transform(m_attach_place_idx, m_attach_offset, m_item_transform);
     m_upd_firedeps_frame = Device.dwFrame;
-    
+
     if (IKinematicsAnimated* ka = m_model->dcast_PKinematicsAnimated())
     {
         ka->UpdateTracks();
@@ -199,7 +204,6 @@ bool attachable_hud_item::need_renderable() const { return m_parent_hud_item->ne
 void attachable_hud_item::render(u32 context_id, IRenderable* root)
 {
     GEnv.Render->add_Visual(context_id, root, m_model->dcast_RenderVisual(), m_item_transform);
-    debug_draw_firedeps();
     m_parent_hud_item->render_hud_mode();
 }
 
@@ -213,9 +217,9 @@ Fmatrix hud_item_measures::load(const shared_str& sect_name, IKinematics* K)
     xr_sprintf(_prefix, "%s", is_16x9 ? "_16x9" : "");
     string128 val_name;
 
-    strconcat(sizeof(val_name), val_name, "hands_position", _prefix);
+    strconcat(val_name, "hands_position", _prefix);
     m_hands_attach[0] = pSettings->r_fvector3(sect_name, val_name);
-    strconcat(sizeof(val_name), val_name, "hands_orientation", _prefix);
+    strconcat(val_name, "hands_orientation", _prefix);
     m_hands_attach[1] = pSettings->r_fvector3(sect_name, val_name);
 
     m_item_attach[0] = pSettings->r_fvector3(sect_name, "item_position");
@@ -233,7 +237,7 @@ Fmatrix hud_item_measures::load(const shared_str& sect_name, IKinematics* K)
         m_fire_point_offset = pSettings->r_fvector3(sect_name, "fire_point");
     }
     else
-        m_fire_point_offset.set(0, 0, 0);
+        m_fire_point_offset = {};
 
     m_prop_flags.set(e_fire_point2, pSettings->line_exist(sect_name, "fire_bone2"));
     if (m_prop_flags.test(e_fire_point2))
@@ -243,7 +247,7 @@ Fmatrix hud_item_measures::load(const shared_str& sect_name, IKinematics* K)
         m_fire_point2_offset = pSettings->r_fvector3(sect_name, "fire_point2");
     }
     else
-        m_fire_point2_offset.set(0, 0, 0);
+        m_fire_point2_offset = {};
 
     m_prop_flags.set(e_shell_point, pSettings->line_exist(sect_name, "shell_bone"));
     if (m_prop_flags.test(e_shell_point))
@@ -253,19 +257,19 @@ Fmatrix hud_item_measures::load(const shared_str& sect_name, IKinematics* K)
         m_shell_point_offset = pSettings->r_fvector3(sect_name, "shell_point");
     }
     else
-        m_shell_point_offset.set(0, 0, 0);
+        m_shell_point_offset = {};
 
-    m_hands_offset[0][0].set(0, 0, 0);
-    m_hands_offset[1][0].set(0, 0, 0);
+    m_hands_offset[0][0] = {};
+    m_hands_offset[1][0] = {};
 
-    strconcat(sizeof(val_name), val_name, "aim_hud_offset_pos", _prefix);
+    strconcat(val_name, "aim_hud_offset_pos", _prefix);
     m_hands_offset[0][1] = pSettings->r_fvector3(sect_name, val_name);
-    strconcat(sizeof(val_name), val_name, "aim_hud_offset_rot", _prefix);
+    strconcat(val_name, "aim_hud_offset_rot", _prefix);
     m_hands_offset[1][1] = pSettings->r_fvector3(sect_name, val_name);
 
-    strconcat(sizeof(val_name), val_name, "gl_hud_offset_pos", _prefix);
+    strconcat(val_name, "gl_hud_offset_pos", _prefix);
     m_hands_offset[0][2] = pSettings->r_fvector3(sect_name, val_name);
-    strconcat(sizeof(val_name), val_name, "gl_hud_offset_rot", _prefix);
+    strconcat(val_name, "gl_hud_offset_rot", _prefix);
     m_hands_offset[1][2] = pSettings->r_fvector3(sect_name, val_name);
 
     R_ASSERT2(pSettings->line_exist(sect_name, "fire_point") == pSettings->line_exist(sect_name, "fire_bone"),
@@ -307,6 +311,9 @@ Fmatrix hud_item_measures::load_monolithic(const shared_str& sect_name, IKinemat
         else
             m_shell_point_offset.set(0, 0, 0);
 
+        m_hands_offset[0][0] = {};
+        m_hands_offset[1][0] = {};
+
         if (wpn->IsZoomEnabled())
         {
             const auto load_zoom_offsets = [&](pcstr prefix, Fvector3& position, Fvector3& rotation)
@@ -317,24 +324,24 @@ Fmatrix hud_item_measures::load_monolithic(const shared_str& sect_name, IKinemat
                 rotation.y = pSettings->r_float(sect_name, strconcat(full_name, prefix, "zoom_rotate_y"));
                 rotation.z = pSettings->read_if_exists<float>(sect_name, strconcat(full_name, prefix, "zoom_rotate_z"), 0.f);
             };
-            load_zoom_offsets("", m_hands_offset[0][0], m_hands_offset[1][0]);
+            load_zoom_offsets("", m_hands_offset[0][1], m_hands_offset[1][1]);
             if (smart_cast<CWeaponMagazinedWGrenade*>(wpn))
             {
-                load_zoom_offsets("grenade_", m_hands_offset[0][1], m_hands_offset[1][1]);
+                load_zoom_offsets("grenade_", m_hands_offset[0][2], m_hands_offset[1][2]);
                 if (wpn->GrenadeLauncherAttachable())
-                    load_zoom_offsets("grenade_normal_", m_hands_offset[0][2], m_hands_offset[1][2]);
+                    load_zoom_offsets("grenade_normal_", m_hands_offset[0][1], m_hands_offset[1][1]);
             }
         }
     }
     else
     {
-        m_fire_bone = BI_NONE;
+        m_fire_bone  = BI_NONE;
         m_fire_bone2 = BI_NONE;
         m_shell_bone = BI_NONE;
 
-        m_fire_point_offset.set(0, 0, 0);
-        m_fire_point2_offset.set(0, 0, 0);
-        m_shell_point_offset.set(0, 0, 0);
+        m_fire_point_offset  = {};
+        m_fire_point2_offset = {};
+        m_shell_point_offset = {};
     }
 
     load_inertion_params(sect_name);
@@ -387,9 +394,9 @@ attachable_hud_item::attachable_hud_item(player_hud* parent, const shared_str& s
         m_visual_name = pSettings->r_string(m_sect_name, "visual");
     }
     R_ASSERT3(!m_visual_name.empty(), "Missing 'item_visual' from weapon hud section.", m_sect_name.c_str());
-
+    GEnv.Render->hud_loading = true;
     m_model = smart_cast<IKinematics*>(GEnv.Render->model_Create(m_visual_name.c_str()));
-
+    GEnv.Render->hud_loading = false;
     m_attach_place_idx = pSettings->read_if_exists<u16>(m_sect_name, "attach_place_idx", 0);
 
     IKinematicsAnimated* animatedHudItem;
@@ -412,8 +419,6 @@ void attachable_hud_item::reload_measures()
 
 u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, const CMotionDef*& md, u8& rnd_idx)
 {
-    const float speed = CalcMotionSpeed(anm_name_b);
-
     string256 anim_name_r;
     const bool is_16x9 = UICore::is_widescreen();
     xr_sprintf(anim_name_r, "%s%s", anm_name_b.c_str(), m_attach_place_idx == 1 && is_16x9 ? "_16x9" : "");
@@ -423,6 +428,8 @@ u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, co
     R_ASSERT2(anm->m_animations.size(), make_string("model [%s] has no motion defined in motion_alias [%s]",
                                             m_visual_name.c_str(), anim_name_r)
                                             .c_str());
+
+    const float speed = CalcMotionSpeed(anm->m_base_name, anm->m_anim_speed);
 
     rnd_idx = (u8)Random.randI(anm->m_animations.size());
     const motion_descr& M = anm->m_animations[rnd_idx];
@@ -477,13 +484,13 @@ u32 attachable_hud_item::anim_play(const shared_str& anm_name_b, BOOL bMixIn, co
 
         string_path ce_path;
         string_path anm_name;
-        strconcat(sizeof(anm_name), anm_name, "camera_effects" DELIMITER "weapon" DELIMITER, M.name.c_str(), ".anm");
+        strconcat(anm_name, "camera_effects" DELIMITER "weapon" DELIMITER, M.name.c_str(), ".anm");
         if (FS.exist(ce_path, "$game_anims$", anm_name))
         {
             CEffectorCam* ec = current_actor->Cameras().GetCamEffector(eCEWeaponAction);
             if (ec)
                 current_actor->Cameras().RemoveCamEffector(eCEWeaponAction);
-            
+
             CAnimatorCamEffector* e = xr_new<CAnimatorCamEffector>();
             e->SetType(eCEWeaponAction);
             e->SetHudAffect(false);
@@ -502,7 +509,7 @@ player_hud::~player_hud()
         IRenderVisual* v = m_model->dcast_RenderVisual();
         GEnv.Render->model_Delete(v);
     }
-    
+
     for (auto& [name, item] : m_pool)
     {
         xr_delete(item);
@@ -539,7 +546,9 @@ void player_hud::load(const shared_str& player_hud_sect)
     }
 
     const shared_str& model_name = pSettings->r_string(m_sect_name, "visual");
+    GEnv.Render->hud_loading = true;
     m_model = smart_cast<IKinematicsAnimated*>(GEnv.Render->model_Create(model_name.c_str()));
+    GEnv.Render->hud_loading = false;
     load_ancors();
     // Msg("hands visual changed to [%s] [%s] [%s]", model_name.c_str(), b_reload ? "R" : "", m_attached_items[0] ? "Y" : "");
 
@@ -620,7 +629,7 @@ void player_hud::render_hud(u32 context_id, IRenderable* root)
 
 u32 player_hud::motion_length(const shared_str& anim_name, const shared_str& hud_name, const CMotionDef*& md)
 {
-    const float speed = CalcMotionSpeed(anim_name);
+    const float speed = CalcMotionSpeed(anim_name, 1.0f);
     attachable_hud_item* pi = create_hud_item(hud_name);
     const player_hud_motion* pm = pi->m_hand_motions.find_motion(anim_name);
 
@@ -830,6 +839,7 @@ void player_hud::update_inertion(Fmatrix& trans) const
 
 attachable_hud_item* player_hud::create_hud_item(const shared_str& sect)
 {
+    current_player_hud_sect = sect;
     auto& item = m_pool[sect];
 
     if (!item)
@@ -851,7 +861,7 @@ void player_hud::attach_item(CHudItem* item)
     attachable_hud_item* pi = create_hud_item(item->HudSection());
     const int item_idx = pi->m_attach_place_idx;
 
-    if (m_attached_items[item_idx] != pi)
+    if (m_attached_items[item_idx] != pi || pi->m_parent_hud_item != item)
     {
         if (m_attached_items[item_idx])
             m_attached_items[item_idx]->m_parent_hud_item->on_b_hud_detach();

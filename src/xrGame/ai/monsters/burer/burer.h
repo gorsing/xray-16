@@ -20,8 +20,6 @@ public:
     u32 last_hit_frame;
     u32 time_last_scan;
 
-    typedef CTelekinesis TTelekinesis;
-
     struct GraviObject
     {
         bool active;
@@ -49,7 +47,11 @@ public:
             enemy = e;
         }
 
-        void deactivate() { active = false; }
+        void deactivate()
+        {
+            active = false;
+            enemy = nullptr;
+        }
     } m_gravi_object;
 
     LPCSTR particle_gravi_wave;
@@ -116,6 +118,7 @@ public:
     LPCSTR particle_fire_shield;
 
     CBurerFastGravi* m_fast_gravi;
+    bool m_use_three_gravi_anims{};
 
 public:
     CBurer();
@@ -147,6 +150,9 @@ public:
     void ActivateShield();
     void DeactivateShield();
 
+    [[nodiscard]]
+    bool CanDeactivateShieldEarly() const;
+
     bool need_shotmark() const { return !m_shield_active; }
     virtual bool ability_distant_feel() { return true; }
     pcstr get_monster_class_name() override { return "burer"; }
@@ -163,6 +169,7 @@ private:
 
 public:
     void face_enemy();
-};
 
-bool actor_is_reloading_weapon();
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CGameObject);
+};

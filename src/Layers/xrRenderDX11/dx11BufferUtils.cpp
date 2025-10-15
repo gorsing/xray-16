@@ -1,19 +1,23 @@
 #include "stdafx.h"
 #include "Layers/xrRender/BufferUtils.h"
 
+#include <FlexibleVertexFormat.h>
+
+namespace xray::render::RENDER_NAMESPACE
+{
 u32 GetFVFVertexSize(u32 FVF)
 {
-    return D3DXGetFVFVertexSize(FVF);
+    return static_cast<u32>(::FVF::ComputeVertexSize(FVF));
 }
 
 u32 GetDeclVertexSize(const VertexElement* decl, u32 Stream)
 {
-    return D3DXGetDeclVertexSize(decl, Stream);
+    return static_cast<u32>(::FVF::ComputeVertexSize(decl, Stream));
 }
 
 u32 GetDeclLength(const VertexElement* decl)
 {
-    return D3DXGetDeclLength(decl);
+    return static_cast<u32>(::FVF::GetDeclLength(decl));
 }
 
 static HRESULT CreateBuffer(ID3DBuffer** ppBuffer, const void* pData, u32 dataSize,
@@ -57,7 +61,7 @@ namespace BufferUtils
 // TODO: replace by streaming buffer instance in `dx11ConstantBuffer`
 HRESULT CreateConstantBuffer(ConstantBufferHandle* ppBuffer, u32 DataSize)
 {
-    return ::CreateConstantBuffer(ppBuffer, DataSize);
+    return RENDER_NAMESPACE::CreateConstantBuffer(ppBuffer, DataSize);
 }
 };
 
@@ -442,3 +446,4 @@ bool IndexStreamBuffer::IsValid() const
 {
     return !!m_DeviceBuffer;
 }
+} // namespace xray::render::RENDER_NAMESPACE

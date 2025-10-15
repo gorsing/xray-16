@@ -3,19 +3,36 @@
 #include "r2_R_sun_support.h"
 #include "xrCore/Threading/ParallelFor.hpp"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void render_sun::init()
 {
     float fBias = -0.0000025f;
 
-    m_sun_cascades[0].reset_chain = true;
-    m_sun_cascades[0].size = 20;
-    m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
+    if (RImplementation.o.new_shader_support)
+    {
+        m_sun_cascades[0].reset_chain = true;
+        m_sun_cascades[0].size = ps_ssfx_shadow_cascades.x;
+        m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
 
-    m_sun_cascades[1].size = 40;
-    m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
+        m_sun_cascades[1].size = ps_ssfx_shadow_cascades.y;
+        m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
 
-    m_sun_cascades[2].size = 160;
-    m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+        m_sun_cascades[2].size = ps_ssfx_shadow_cascades.z;
+        m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+    }
+    else
+    {
+        m_sun_cascades[0].reset_chain = true;
+        m_sun_cascades[0].size = 20;
+        m_sun_cascades[0].bias = m_sun_cascades[0].size * fBias;
+
+        m_sun_cascades[1].size = 40;
+        m_sun_cascades[1].bias = m_sun_cascades[1].size * fBias;
+
+        m_sun_cascades[2].size = 160;
+        m_sun_cascades[2].bias = m_sun_cascades[2].size * fBias;
+    }
 
     // 	for( u32 i = 0; i < cascade_count; ++i )
     // 	{
@@ -34,7 +51,7 @@ void render_sun::init()
         return;
 
     // pre-allocate contexts
-    for (int i = 0; i < R__NUM_SUN_CASCADES; ++i)
+    for (u32 i = 0; i < R__NUM_SUN_CASCADES; ++i)
     {
         contexts_ids[i] = RImplementation.alloc_context();
         VERIFY(contexts_ids[i] != R_dsgraph_structure::INVALID_CONTEXT_ID);
@@ -46,6 +63,8 @@ void render_sun::init()
 
 void render_sun::calculate()
 {
+    ZoneScoped;
+
     need_to_render_sunshafts = RImplementation.Target->need_to_render_sunshafts();
     last_cascade_chain_mode = m_sun_cascades[R__NUM_SUN_CASCADES - 1].reset_chain;
     if (need_to_render_sunshafts)
@@ -97,11 +116,9 @@ void render_sun::calculate()
     Fvector3 cull_COP[R__NUM_SUN_CASCADES];
     Fmatrix cull_xform[R__NUM_SUN_CASCADES];
 
-    for (int cascade_ind = 0; cascade_ind < R__NUM_SUN_CASCADES; ++cascade_ind)
+    for (u32 cascade_ind = 0; cascade_ind < R__NUM_SUN_CASCADES; ++cascade_ind)
     {
         cull_planes.clear();
-
-        FPU::m64r();
 
         //******************************* Need to be placed after cuboid built **************************
         // COP - 100 km away
@@ -119,6 +136,7 @@ void render_sun::calculate()
             if (cascade_ind == 0 || m_sun_cascades[cascade_ind].reset_chain)
             {
                 Fvector3 near_p, edge_vec;
+                light_cuboid.view_frustum_rays.reserve(4);
                 for (int p = 0; p < 4; p++)
                 {
                     near_p = wform(fullxform_inv, sun::corners[sun::facetable[4][p]]);
@@ -142,19 +160,12 @@ void render_sun::calculate()
         float map_size = m_sun_cascades[cascade_ind].size;
 #if defined(USE_OGL)
         XRMatrixOrthoOffCenterLH(&mdir_Project, -map_size * 0.5f, map_size * 0.5f, -map_size * 0.5f,
-                                   map_size * 0.5f, 0.1f, dist + /*sqrt(2)*/1.41421f * map_size);
-#else
-#ifdef USE_DX9
-        XMStoreFloat4x4((XMFLOAT4X4*)&mdir_Project, XMMatrixOrthographicOffCenterLH(
-            -map_size * 0.5f, map_size * 0.5f, -map_size * 0.5f,
-            map_size * 0.5f, 0.1f, dist + map_size)
-        );
+            map_size * 0.5f, 0.1f, dist + /*sqrt(2)*/1.41421f * map_size);
 #else
         XMStoreFloat4x4((XMFLOAT4X4*)&mdir_Project, XMMatrixOrthographicOffCenterLH(
             -map_size * 0.5f, map_size * 0.5f, -map_size * 0.5f,
             map_size * 0.5f, 0.1f, dist + /*sqrt(2)*/ 1.41421f * map_size)
         );
-#endif
 #endif
         //////////////////////////////////////////////////////////////////////////
         // snap view-position to pixel
@@ -162,7 +173,6 @@ void render_sun::calculate()
         Fmatrix cull_xform_inv;
         cull_xform_inv.invert(cull_xform[cascade_ind]);
 
-        //		light_cuboid.light_cuboid_points.reserve		(9);
         for (int p = 0; p < 8; p++)
         {
             Fvector3 xf = wform(cull_xform_inv, sun::corners[p]);
@@ -258,7 +268,6 @@ void render_sun::calculate()
         sun->X.D[cascade_ind].combine = cull_xform[cascade_ind];
 
         // full-xform
-        FPU::m24r();
     }
 
     const auto process_cascade = [&, this](const TaskRange<u32>& range)
@@ -281,7 +290,7 @@ void render_sun::calculate()
             }
         }
     };
-    
+
     if (o.mt_calc_enabled)
     {
         xr_parallel_for(TaskRange<u32>(0, R__NUM_SUN_CASCADES), process_cascade);
@@ -305,6 +314,10 @@ void render_sun::render()
     {
         for (u32 cascade_ind = range.begin(); cascade_ind != range.end(); ++cascade_ind)
         {
+#if defined(USE_DX11)
+            //TracyD3D11Zone(HW.profiler_ctx, "render_sun::render_cascade");
+#endif
+
             auto& dsgraph = RImplementation.get_context(contexts_ids[cascade_ind]);
 
             bool bNormal = !dsgraph.mapNormalPasses[0][0].empty() || !dsgraph.mapMatrixPasses[0][0].empty();
@@ -318,7 +331,20 @@ void render_sun::render()
                 dsgraph.cmd_list.set_xform_project(sun->X.D[cascade_ind].combine);
                 dsgraph.render_graph(0);
                 if (ps_r2_ls_flags.test(R2FLAG_SUN_DETAILS))
-                    RImplementation.Details->Render(dsgraph.cmd_list);
+                {
+                    if (RImplementation.o.new_shader_support)
+                    {
+                        if (cascade_ind <= ps_ssfx_grass_shadows.x)
+                        {
+                            RImplementation.Details->fade_distance = dm_fade * dm_fade * ps_ssfx_grass_shadows.y;
+                            RImplementation.Details->Render(dsgraph.cmd_list);
+                        }
+                    }
+                    else
+                    {
+                        RImplementation.Details->Render(dsgraph.cmd_list);
+                    }
+                }
                 sun->X.D[cascade_ind].transluent = FALSE;
                 if (bSpecial)
                 {
@@ -354,7 +380,7 @@ void render_sun::flush()
 
     if (RImplementation.o.support_rt_arrays)
     {
-        for (int cascade_ind = 0; cascade_ind < R__NUM_SUN_CASCADES; ++cascade_ind)
+        for (u32 cascade_ind = 0; cascade_ind < R__NUM_SUN_CASCADES; ++cascade_ind)
         {
             accumulate_cascade(cascade_ind);
         }
@@ -371,38 +397,41 @@ void render_sun::flush()
 
 void render_sun::accumulate_cascade(u32 cascade_ind)
 {
+#if defined(USE_DX11)
+    //TracyD3D11Zone(HW.profiler_ctx, "render_sun::accumulate_cascade");
+#endif
+
+    auto* target  = RImplementation.Target;
     auto& dsgraph = RImplementation.get_context(contexts_ids[cascade_ind]);
 
-    if ((cascade_ind == SE_SUN_NEAR) && RImplementation.Target->use_minmax_sm_this_frame())
+    if ((cascade_ind == SE_SUN_NEAR) && target->use_minmax_sm_this_frame())
     {
         PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_NEAR_MINMAX_GENERATE);
-        RImplementation.Target->create_minmax_SM(dsgraph.cmd_list);
+        target->create_minmax_SM(dsgraph.cmd_list);
     }
 
     // Accumulate
+    target->rt_smap_depth->set_slice_read(cascade_ind);
+    if (cascade_ind == 0)
     {
-        // Accumulate
-        RImplementation.Target->rt_smap_depth->set_slice_read(cascade_ind);
-        if (cascade_ind == 0)
-        {
-            PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_NEAR);
-            RImplementation.Target->accum_direct_cascade(dsgraph.cmd_list, SE_SUN_NEAR, m_sun_cascades[cascade_ind].xform,
-                m_sun_cascades[cascade_ind].xform, m_sun_cascades[cascade_ind].bias);
-        }
-        else if (cascade_ind < R__NUM_SUN_CASCADES - 1)
-        {
-            PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_MIDDLE);
-            RImplementation.Target->accum_direct_cascade(dsgraph.cmd_list, SE_SUN_MIDDLE, m_sun_cascades[cascade_ind].xform,
-                m_sun_cascades[cascade_ind - 1].xform, m_sun_cascades[cascade_ind].bias);
-        }
-        else
-        {
-            PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_FAR);
-            RImplementation.Target->accum_direct_cascade(dsgraph.cmd_list, SE_SUN_FAR, m_sun_cascades[cascade_ind].xform,
-                m_sun_cascades[cascade_ind - 1].xform, m_sun_cascades[cascade_ind].bias);
-        }
+        PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_NEAR);
+        target->accum_direct_cascade(dsgraph.cmd_list, SE_SUN_NEAR, m_sun_cascades[cascade_ind].xform,
+                                                     m_sun_cascades[cascade_ind].xform, m_sun_cascades[cascade_ind].bias);
+    }
+    else if (cascade_ind < R__NUM_SUN_CASCADES - 1)
+    {
+        PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_MIDDLE);
+        target->accum_direct_cascade(dsgraph.cmd_list, SE_SUN_MIDDLE, m_sun_cascades[cascade_ind].xform,
+                                                     m_sun_cascades[cascade_ind - 1].xform, m_sun_cascades[cascade_ind].bias);
+    }
+    else
+    {
+        PIX_EVENT_CTX(dsgraph.cmd_list, SE_SUN_FAR);
+        target->accum_direct_cascade(dsgraph.cmd_list, SE_SUN_FAR, m_sun_cascades[cascade_ind].xform,
+                                                     m_sun_cascades[cascade_ind - 1].xform, m_sun_cascades[cascade_ind].bias);
     }
 
     dsgraph.cmd_list.submit(); // TODO: move into release (rename to submit?)
     RImplementation.release_context(dsgraph.context_id);
 }
+} // namespace xray::render::RENDER_NAMESPACE

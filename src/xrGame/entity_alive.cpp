@@ -3,7 +3,7 @@
 #include "InventoryOwner.h"
 #include "Inventory.h"
 #include "xrPhysics/PhysicsShell.h"
-#include "xrEngine/GameMtlLib.h"
+#include "xrMaterialSystem/GameMtlLib.h"
 #include "PHMovementControl.h"
 #include "Wound.h"
 #include "xrMessages.h"
@@ -285,8 +285,7 @@ void CEntityAlive::Hit(SHit* pHDS)
     if (HDS.hit_type != ALife::eHitTypeTelepatic)
     {
         //добавить кровь на стены
-        if (!use_simplified_visual())
-            BloodyWallmarks(HDS.damage(), HDS.dir, HDS.bone(), HDS.p_in_bone_space);
+        BloodyWallmarks(HDS.damage(), HDS.dir, HDS.bone(), HDS.p_in_bone_space);
     }
 
     //-------------------------------------------

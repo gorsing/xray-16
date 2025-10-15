@@ -1,8 +1,8 @@
 #pragma once
-#include "xrUICore/Windows/UIWindow.h"
-#include "UIDialogHolder.h"
 
-class CDialogHolder;
+#include "xrUICore/Windows/UIWindow.h"
+
+#include "UIDialogHolder.h"
 
 class CUIDialogWnd : public CUIWindow
 {
@@ -19,10 +19,11 @@ public:
     virtual void Show(bool status);
 
     bool OnKeyboardAction(int dik, EUIMessages keyboard_action) override;
-    bool OnControllerAction(int axis, float x, float y, EUIMessages controller_action) override;
+    bool OnControllerAction(int axis, const ControllerAxisState& state, EUIMessages controller_action) override;
 
-    CDialogHolder* GetHolder() { return m_pParentHolder; }
+    CDialogHolder* GetHolder() const { return m_pParentHolder; }
     void SetHolder(CDialogHolder* h) { m_pParentHolder = h; }
+
     virtual bool StopAnyMove() { return true; }
     virtual bool NeedCursor() const { return true; }
     virtual bool NeedCenterCursor() const { return true; }
@@ -36,4 +37,7 @@ public:
 
     pcstr GetDebugType() override { return "CUIDialogWnd"; }
     void FillDebugInfo() override;
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION(CUIWindow, CDialogHolder);
 };

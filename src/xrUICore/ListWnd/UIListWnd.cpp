@@ -1,14 +1,16 @@
 #include"pch.hpp"
+
 #include "UIListWnd.h"
-//.#include "uiscrollbar.h"
+#include "ScrollBar/UIScrollBar.h"
 #include "Windows/UIFrameLineWnd.h"
+#include "Cursor/UICursor.h"
 
 //#define ACTIVE_BACKGROUND			"ui\\ui_pop_up_active_back"
 //#define ACTIVE_BACKGROUND_WIDTH	16
 //#define ACTIVE_BACKGROUND_HEIGHT	16
 
 // разделитель для интерактивных строк в листе
-static const char cSeparatorChar = '%';
+//static const char cSeparatorChar = '%';
 
 CUIListWnd::CUIListWnd() : CUIWindow("CUIListWnd")
 {
@@ -56,7 +58,7 @@ void CUIListWnd::InitListWnd(Fvector2 pos, Fvector2 size, float item_height)
     AttachChild(m_ScrollBar);
 
     if (!!m_scrollbar_profile)
-        m_ScrollBar->InitScrollBar(Fvector2().set(size.x, 0.0f), size.y, false, *m_scrollbar_profile);
+        m_ScrollBar->InitScrollBar(Fvector2().set(size.x, 0.0f), size.y, false, m_scrollbar_profile.c_str());
     else
         m_ScrollBar->InitScrollBar(Fvector2().set(size.x, 0.0f), size.y, false);
 
@@ -71,7 +73,6 @@ void CUIListWnd::InitListWnd(Fvector2 pos, Fvector2 size, float item_height)
     SetItemHeight(item_height);
     m_iRowNum = iFloor(size.y / m_iItemHeight);
 
-
     m_ScrollBar->SetRange(0, 0);
     m_ScrollBar->SetPageSize(0);
     m_ScrollBar->SetScrollPos(s16(m_iFirstShownIndex));
@@ -81,9 +82,9 @@ void CUIListWnd::InitListWnd(Fvector2 pos, Fvector2 size, float item_height)
 
     /*
         m_StaticActiveBackground.Init(ACTIVE_BACKGROUND,"hud\\default", 0,0,alNone);
-        m_StaticActiveBackground.SetTile(iFloor(m_iItemWidth/ACTIVE_BACKGROUND_WIDTH), 
+        m_StaticActiveBackground.SetTile(iFloor(m_iItemWidth/ACTIVE_BACKGROUND_WIDTH),
                                          iFloor(m_iItemHeight/ACTIVE_BACKGROUND_HEIGHT),
-                                         fmod(m_iItemWidth,float(ACTIVE_BACKGROUND_WIDTH)), 
+                                         fmod(m_iItemWidth,float(ACTIVE_BACKGROUND_WIDTH)),
                                          fmod(m_iItemHeight,float(ACTIVE_BACKGROUND_HEIGHT)));
     */
     UpdateList();
@@ -107,9 +108,9 @@ void CUIListWnd::SetWidth(float width)
 {
     inherited::SetWidth(width);
     /*
-        m_StaticActiveBackground.SetTile(iFloor(GetWidth()/ACTIVE_BACKGROUND_WIDTH), 
+        m_StaticActiveBackground.SetTile(iFloor(GetWidth()/ACTIVE_BACKGROUND_WIDTH),
                                          iFloor(m_iItemHeight/ACTIVE_BACKGROUND_HEIGHT),
-                                         fmod(GetWidth(),float(ACTIVE_BACKGROUND_WIDTH)), 
+                                         fmod(GetWidth(),float(ACTIVE_BACKGROUND_WIDTH)),
                                          fmod(float(m_iItemHeight),float(ACTIVE_BACKGROUND_HEIGHT))
                                          );
     */
@@ -129,7 +130,6 @@ void CUIListWnd::RemoveItem(int index)
     R_ASSERT(m_ItemList.end() != it);
 
     DetachChild(*it);
-
 
     UpdateList();
 
@@ -170,7 +170,6 @@ CUIListItem* CUIListWnd::GetItem(int index)
     return (*it);
 }
 
-
 void CUIListWnd::DetachChild(CUIWindow* pChild)
 {
     LIST_ITEM_LIST_it it = std::find(m_ItemList.begin(), m_ItemList.end(), pChild);
@@ -192,7 +191,6 @@ void CUIListWnd::RemoveAll()
 
     m_iFirstShownIndex = 0;
 
-
     UpdateList();
     Reset();
 
@@ -203,7 +201,6 @@ void CUIListWnd::RemoveAll()
 
     UpdateScrollBar();
 }
-
 
 //////////////////////////////////////////////////////////////////////////
 
@@ -217,13 +214,12 @@ void CUIListWnd::UpdateList()
 
     LIST_ITEM_LIST_it it = m_ItemList.begin();
 
-    //спрятать все элементы до участка 
+    //спрятать все элементы до участка
     //отображающейся в данный момент
     for (int i = 0; i < _min(m_ItemList.size(), m_iFirstShownIndex); ++i, ++it)
     {
         (*it)->Show(false);
     }
-
 
     //показать текущий список
     for (int i = m_iFirstShownIndex;
@@ -249,13 +245,11 @@ void CUIListWnd::UpdateList()
     --it;
 
     //спрятать все после
-    for (u32 k = m_iFirstShownIndex + m_iRowNum;
-         k < m_ItemList.size(); ++k, ++it)
+    for (u32 k = m_iFirstShownIndex + m_iRowNum; k < m_ItemList.size(); ++k, ++it)
     {
         (*it)->Show(false);
         //		(*it)->Enable(false);
     }
-
 
     UpdateScrollBar();
 }
@@ -292,8 +286,7 @@ void CUIListWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
                         continue;
                     if (pListItem2->GetGroupID() == -1)
                         continue;
-                    if (pListItem2->GetGroupID() ==
-                        pListItem->GetGroupID())
+                    if (pListItem2->GetGroupID() == pListItem->GetGroupID())
                     {
                         pListItem2->SetHighlightText(true);
                         pListItem2->SendMessage(this, LIST_ITEM_SELECT, pData);
@@ -319,14 +312,15 @@ void CUIListWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
                 else if (m_iFocusedItem >= 0)
                     m_iFocusedItemGroupID = GetItem(m_iFocusedItem)->GetGroupID();
 
-
                 // prototype code
 
                 for (auto it = m_ChildWndList.begin(); it != m_ChildWndList.end(); ++it)
                 {
                     pListItem2 = smart_cast<CUIListItem*>(*it);
-                    if (!pListItem2) continue;
-                    if (pListItem2->GetGroupID() == -1) continue;
+                    if (!pListItem2)
+                        continue;
+                    if (pListItem2->GetGroupID() == -1)
+                        continue;
                     if (pListItem2->GetGroupID() == pListItem->GetGroupID())
                     {
                         pListItem2->SetHighlightText(true);
@@ -342,12 +336,14 @@ void CUIListWnd::SendMessage(CUIWindow* pWnd, s16 msg, void* pData)
             }
             else if (WINDOW_FOCUS_LOST == msg)
             {
-                if (pListItem->GetIndex() == m_iFocusedItem && !m_bForceFocusedItem) m_iFocusedItem = -1;
+                if (pListItem->GetIndex() == m_iFocusedItem && !m_bForceFocusedItem)
+                    m_iFocusedItem = -1;
 
                 for (auto it = m_ChildWndList.begin(); it != m_ChildWndList.end(); ++it)
                 {
                     pListItem2 = smart_cast<CUIListItem*>(*it);
-                    if (!pListItem2) continue;
+                    if (!pListItem2)
+                        continue;
                     pListItem2->SetHighlightText(false);
                     pListItem2->SendMessage(this, WINDOW_FOCUS_LOST, pData);
                 }
@@ -386,8 +382,10 @@ void CUIListWnd::Draw()
         for (auto it = m_ChildWndList.begin(); it != m_ChildWndList.end(); ++it)
         {
             CUIListItem* pListItem2 = smart_cast<CUIListItem*>(*it);
-            if (!pListItem2) continue;
-            if (pListItem2->GetGroupID() == -1) continue;
+            if (!pListItem2)
+                continue;
+            if (pListItem2->GetGroupID() == -1)
+                continue;
             if ((pListItem2->GetGroupID() == m_iFocusedItemGroupID) &&
                 ((pListItem2->GetIndex() >= m_iFirstShownIndex) &&
                     (pListItem2->GetIndex() <= m_iRowNum + m_iFirstShownIndex - 1)))
@@ -404,8 +402,10 @@ void CUIListWnd::Draw()
         for (auto it = m_ChildWndList.begin(); it != m_ChildWndList.end(); ++it)
         {
             CUIListItem* pListItem2 = smart_cast<CUIListItem*>(*it);
-            if (!pListItem2) continue;
-            if (pListItem2->GetGroupID() == -1) continue;
+            if (!pListItem2)
+                continue;
+            if (pListItem2->GetGroupID() == -1)
+                continue;
             if (pListItem2->GetIndex() == m_iSelectedItem)
             {
                 GEnv.UI->PushScissor(rect);
@@ -419,7 +419,6 @@ void CUIListWnd::Draw()
 
     CUIWindow::Draw();
 }
-
 
 void CUIListWnd::SetItemWidth(float iItemWidth)
 {
@@ -474,21 +473,16 @@ int CUIListWnd::FindItemWithValue(int iValue)
     return -1;
 }
 
-
 bool CUIListWnd::OnMouseAction(float x, float y, EUIMessages mouse_action)
 {
     switch (mouse_action)
     {
-    case WINDOW_LBUTTON_DB_CLICK:
-        break;
     case WINDOW_MOUSE_WHEEL_DOWN:
         m_ScrollBar->TryScrollInc();
         return true;
-        break;
     case WINDOW_MOUSE_WHEEL_UP:
         m_ScrollBar->TryScrollDec();
         return true;
-        break;
     }
 
     return inherited::OnMouseAction(x, y, mouse_action);
@@ -552,11 +546,11 @@ void CUIListWnd::ScrollToEnd()
     UpdateList();
 }
 
-void CUIListWnd::ScrollToPos(int position)
+void CUIListWnd::ScrollToPos(int position, float center_y_ratio /*= 0.5f*/)
 {
     if (IsScrollBarEnabled())
     {
-        int pos = position;
+        int pos = position - iFloor(float(m_iRowNum) * center_y_ratio);
         clamp(pos, m_ScrollBar->GetMinRange(), (m_ScrollBar->GetMaxRange() - m_ScrollBar->GetPageSize() / + 1));
         m_ScrollBar->SetScrollPos(pos);
         m_iFirstShownIndex = m_ScrollBar->GetScrollPos();
@@ -570,6 +564,27 @@ void CUIListWnd::Update()
     {
         OnMouseAction(cursor_pos.x, cursor_pos.y, WINDOW_MOUSE_MOVE);
         m_bUpdateMouseMove = false;
+    }
+
+    if (const auto focused = CursorOverWindow() ? UI().Focus().GetFocused() : nullptr)
+    {
+        const auto parentItem = focused->GetWindowBeforeParent(this);
+
+        const auto listItem = dynamic_cast<CUIListItem*>(parentItem);
+        const auto currentSelectedItem = GetItem(GetSelectedItem());
+
+        if (listItem && listItem != currentSelectedItem)
+        {
+            const auto prevPos = m_iFirstShownIndex;
+
+            ScrollToPos(GetItemPos(listItem));
+
+            if (prevPos != m_iFirstShownIndex)
+            {
+                SendMessage(listItem, BUTTON_CLICKED, nullptr);
+                UI().GetUICursor().WarpToWindow(focused);
+            }
+        }
     }
 
     inherited::Update();

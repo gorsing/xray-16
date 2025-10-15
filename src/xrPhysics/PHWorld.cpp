@@ -7,10 +7,6 @@
 #include "ExtendedGeom.h"
 #include "dRayMotions.h"
 #include "PHCollideValidator.h"
-#include "xrEngine/GameMtlLib.h"
-#include "xrEngine/device.h"
-#include "xrEngine/GameFont.h"
-#include "xrEngine/PerformanceAlert.hpp"
 
 #include "params.h"
 #ifdef DEBUG
@@ -21,10 +17,17 @@
 #include "xrServerEntities/PHNetState.h"
 #include "GeometryBits.h"
 #include "console_vars.h"
-#include "xrEngine/device.h"
-#include "xrEngine/defines.h"
-#include "xrCDB/xr_area.h"
+#include "PHCommander.h"
+#include "PHSimpleCalls.h"
+
 #include "xrCore/FS_internal.h"
+
+#include "xrCDB/xr_area.h"
+#include "xrEngine/defines.h"
+#include "xrEngine/device.h"
+#include "xrEngine/GameFont.h"
+#include "xrEngine/PerformanceAlert.hpp"
+
 #ifdef DEBUG
 //				void DBG_ObjAfterPhDataUpdate	( CPHObject *obj );
 //				void DBG_ObjBeforePhDataUpdate	( CPHObject *obj );
@@ -43,9 +46,10 @@ CPHWorld* ph_world = 0;
 
 IPHWorld* physics_world() { return ph_world; }
 void create_physics_world(
-    bool mt, CObjectSpace* os, CObjectList* lo) // IPHWorldUpdateCallbck &commander,
+    bool mt, CObjectSpace* os, CObjectList* lo)
 {
-    ph_world = xr_new<CPHWorld>(); //&commander
+    ZoneScoped;
+    ph_world = xr_new<CPHWorld>();
     VERIFY(os);
     //		VERIFY( lo );
     ph_world->Create(mt, os, lo);
@@ -53,30 +57,11 @@ void create_physics_world(
 
 void destroy_physics_world()
 {
+    ZoneScoped;
     ph_world->Destroy();
     xr_delete(ph_world);
 }
 
-CObjectSpace* create_object_space()
-{
-    // CFileReader* fr =	new CFileReader("D:/STALKER/resources/gamedata/levels/stohe_selo/level.cform");
-    CFileReader* fr = xr_new<CFileReader>("ActorEditorLevel.cform");
-    CObjectSpace* os = xr_new<CObjectSpace>();
-    g_SpatialSpace = xr_new<ISpatial_DB>("Spatial obj");
-    g_SpatialSpacePhysic = xr_new<ISpatial_DB>("Spatial phys");
-    os->Load(fr, nullptr, nullptr, nullptr);
-    // xr_delete(fr);
-    return os;
-}
-CObjectSpace* mesh_create_object_space(
-    Fvector* verts, CDB::TRI* tris, const hdrCFORM& H, CDB::build_callback build_callback)
-{
-    CObjectSpace* os = xr_new<CObjectSpace>();
-    g_SpatialSpace = xr_new<ISpatial_DB>("Spatial obj");
-    g_SpatialSpacePhysic = xr_new<ISpatial_DB>("Spatial phys");
-    os->Create(verts, tris, H, build_callback, nullptr, nullptr);
-    return os;
-}
 void destroy_object_space(CObjectSpace*& os) { xr_delete(os); }
 void CPHMesh::Create(dSpaceID space, dWorldID world)
 {
@@ -106,17 +91,9 @@ dGeomID plane;
 void CPHWorld::OnRender() { debug_output().PH_DBG_Render(); }
 #endif
 
-static struct sempty_update_callback : public IPHWorldUpdateCallbck
-{
-    void update_step(){};
-    void phys_shell_relcase(CPhysicsShell* sh){};
-} empty_update_callback;
-
 CPHWorld::CPHWorld()
-    : // IPHWorldUpdateCallbck		*_update_callback
-      m_update_callback(&empty_update_callback),
-      m_default_contact_shotmark(0), m_default_character_contact_shotmark(0), physics_step_time_callback(0),
-      m_object_space(0), m_level_objects(0)
+    : m_object_space(0), m_level_objects(0), m_default_contact_shotmark(0),
+      m_default_character_contact_shotmark(0), physics_step_time_callback(0)
 {
     disable_count = 0;
     m_frame_time = 0.f;
@@ -152,13 +129,15 @@ void CPHWorld::SetStep(float s)
 }
 void CPHWorld::Create(bool mt, CObjectSpace* os, CObjectList* lo)
 {
+    ZoneScoped;
+
     LoadParams();
     dWorldID phWorld = 0;
     m_object_space = os;
     m_level_objects = lo;
     Device.AddSeqFrame(this, mt);
+    m_commander = xr_new<CPHCommander>();
 
-// m_commander							=new CPHCommander();
 // dVector3 extensions={2048,256,2048};
 /*
 Fbox	level_box		=	Level().ObjectSpace.GetBoundingVolume();
@@ -205,8 +184,10 @@ dVector3 center			=	{level_center.x,0.f,level_center.z};
 
 void CPHWorld::Destroy()
 {
+    ZoneScoped;
+
     r_spatial.clear();
-    // xr_delete(m_commander);
+    xr_delete(m_commander);
     Mesh.Destroy();
 #ifdef PH_PLAIN
     dGeomDestroy(plane);
@@ -234,6 +215,7 @@ void CPHWorld::SetGravity(float g)
 
 void CPHWorld::OnFrame()
 {
+    ZoneScoped;
     stats.FrameStart();
 // Msg									("------------- physics: %d / %d",u32(Device.dwFrame),u32(m_steps_num));
 //calculate the flight of bullets
@@ -356,9 +338,7 @@ void CPHWorld::Step()
     debug_output().dbg_islands_num() = 0;
 #endif
     //////////////////////////////////////////////////////////////////////
-    VERIFY(m_update_callback);
-    m_update_callback->update_step();
-    //	m_commander						->update();
+    m_commander->update_threadsafety();
     //////////////////////////////////////////////////////////////////////
     for (i_object = m_objects.begin(); m_objects.end() != i_object;)
     {
@@ -582,12 +562,9 @@ void CPHWorld::CutVelocity(float l_limit, float a_limit)
 }
 void CPHWorld::NetRelcase(CPhysicsShell* s)
 {
-    /*
-        CPHReqComparerHasShell c(s);
-        m_commander->remove_calls(&c);
-    */
-    VERIFY(m_update_callback);
-    m_update_callback->phys_shell_relcase(s);
+    CPHReqComparerHasShell c(s);
+    m_commander->remove_calls_threadsafety(&c);
+
     PH_UPDATE_OBJECT_I i_update_object;
     for (i_update_object = m_update_objects.begin(); m_update_objects.end() != i_update_object;)
     {
@@ -597,12 +574,12 @@ void CPHWorld::NetRelcase(CPhysicsShell* s)
         // obj->PhTune(fixed_step);
     }
 }
-/*
-void CPHWorld::AddCall(CPHCondition*c,CPHAction*a)
+
+void CPHWorld::AddCall(CPHCondition* c,CPHAction* a)
 {
-    m_commander->add_call(c,a);
+    m_commander->add_call_threadsafety(c, a);
 }
-*/
+
 u16 CPHWorld::ObjectsNumber() { return m_objects.count(); }
 u16 CPHWorld::UpdateObjectsNumber() { return m_update_objects.count(); }
 void CPHWorld::GetState(V_PH_WORLD_STATE& state)

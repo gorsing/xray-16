@@ -2,11 +2,12 @@
 #pragma hdrstop
 
 #include "FS_internal.h"
+#include "FS_impl.h"
 
 #if defined(XR_PLATFORM_WINDOWS)
 #include <io.h>
 #include <direct.h>
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
 #include <sys/mman.h>
 #endif
 #include <sys/stat.h>
@@ -18,7 +19,7 @@ u32 g_file_mapped_count = 0;
 typedef xr_map<u32, std::pair<u32, shared_str>> FILE_MAPPINGS;
 FILE_MAPPINGS g_file_mappings;
 
-void register_file_mapping(void* address, const u32& size, LPCSTR file_name)
+void register_file_mapping(void* address, const u32& size, pcstr file_name)
 {
     FILE_MAPPINGS::const_iterator I = g_file_mappings.find(*(u32*)&address);
     VERIFY(I == g_file_mappings.end());
@@ -83,27 +84,11 @@ void VerifyPath(pcstr path)
     }
 }
 
-#ifdef _EDITOR
-bool file_handle_internal(pcstr file_name, size_t& size, int& hFile)
-{
-    hFile = _open(file_name, O_RDONLY | O_BINARY | O_SEQUENTIAL);
-    if (hFile <= 0)
-    {
-        Sleep(1);
-        hFile = _open(file_name, O_RDONLY | O_BINARY | O_SEQUENTIAL);
-        if (hFile <= 0)
-            return (false);
-    }
-
-    size = filelength(hFile);
-    return (true);
-}
-#else // EDITOR
 static int open_internal(pcstr fn, int& handle)
 {
 #if defined(XR_PLATFORM_WINDOWS)
     return (_sopen_s(&handle, fn, _O_RDONLY | _O_BINARY, _SH_DENYNO, _S_IREAD));
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     pstr conv_fn = xr_strdup(fn);
     convert_path_separators(conv_fn);
     handle = open(conv_fn, _O_RDONLY);
@@ -127,17 +112,14 @@ bool file_handle_internal(pcstr file_name, size_t& size, int& file_handle)
     size = _filelength(file_handle);
     return (true);
 }
-#endif // EDITOR
 
 void* FileDownload(pcstr file_name, const int& file_handle, size_t& file_size)
 {
+    VERIFY(file_size != 0);
     void* buffer = xr_malloc(file_size);
 
-    int r_bytes = _read(file_handle, buffer, file_size);
-    R_ASSERT3(
-        // !file_size ||
-        // (r_bytes && (file_size >= (u32)r_bytes)),
-        file_size == (u32)r_bytes, "can't read from file : ", file_name);
+    const auto r_bytes = _read(file_handle, buffer, file_size);
+    R_ASSERT3(file_size == static_cast<size_t>(r_bytes), "Can't read from file : ", file_name);
 
     // file_size = r_bytes;
 
@@ -218,7 +200,7 @@ void CMemoryWriter::w(const void* ptr, size_t count)
 }
 
 // static const u32 mb_sz = 0x1000000;
-bool CMemoryWriter::save_to(LPCSTR fn) const
+bool CMemoryWriter::save_to(pcstr fn) const
 {
     IWriter* F = FS.w_open(fn);
     if (F)
@@ -338,8 +320,6 @@ void IReader::close()
     xr_delete(self);
 }
 
-#include "FS_impl.h"
-
 #ifdef TESTING_IREADER
 IReaderTestPolicy::~IReaderTestPolicy() { xr_delete(m_test); };
 #endif // TESTING_IREADER
@@ -428,11 +408,7 @@ void IReader::r_string(char* dest, size_t tgt_sz)
     R_ASSERT(!IsBadReadPtr((void*)src, sz));
 #endif
 
-#ifdef _EDITOR
-    CopyMemory(dest, src, sz);
-#else
     strncpy_s(dest, tgt_sz, src, sz);
-#endif
     dest[sz] = 0;
 }
 void IReader::r_string(xr_string& dest)
@@ -470,6 +446,23 @@ void IReader::skip_stringZ()
     Pos++;
 };
 
+bool IReader::try_r_string(char* dest, size_t tgt_sz)
+{
+    char* src = (char*)data + Pos;
+    size_t sz = advance_term_string();
+    if (sz >= tgt_sz)
+        return false;
+
+#if defined(XR_PLATFORM_WINDOWS)
+    R_ASSERT(!IsBadReadPtr((void*)src, sz));
+#endif
+
+    strncpy_s(dest, tgt_sz, src, sz);
+    dest[sz] = 0;
+
+    return true;
+}
+
 //---------------------------------------------------
 // temp stream
 CTempReader::~CTempReader() { xr_free(data); };
@@ -482,7 +475,7 @@ CPackReader::~CPackReader()
 #endif // DEBUG
 #if defined(XR_PLATFORM_WINDOWS)
     UnmapViewOfFile(base_address);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE)
+#elif defined(XR_PLATFORM_POSIX)
     ::munmap(base_address, Size);
 #else
 #   error Select or add implementation for your platform
@@ -510,15 +503,18 @@ CVirtualFileRW::CVirtualFileRW(pcstr cFileName)
     // Open the file
     hSrcFile = CreateFile(cFileName, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
     R_ASSERT3(hSrcFile != INVALID_HANDLE_VALUE, cFileName, xrDebug::ErrorToString(GetLastError()));
-    Size = (int)GetFileSize(hSrcFile, NULL);
-    R_ASSERT3(Size, cFileName, xrDebug::ErrorToString(GetLastError()));
+
+    LARGE_INTEGER size;
+    BOOL result = GetFileSizeEx(hSrcFile, &size);
+    Size = static_cast<size_t>(size.QuadPart);
+    R_ASSERT3(result && Size, cFileName, xrDebug::ErrorToString(GetLastError()));
 
     hSrcMap = CreateFileMapping(hSrcFile, 0, PAGE_READWRITE, 0, 0, 0);
     R_ASSERT3(hSrcMap != INVALID_HANDLE_VALUE, cFileName, xrDebug::ErrorToString(GetLastError()));
 
     data = (char*)MapViewOfFile(hSrcMap, FILE_MAP_ALL_ACCESS, 0, 0, 0);
     R_ASSERT3(data, cFileName, xrDebug::ErrorToString(GetLastError()));
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
+#elif defined(XR_PLATFORM_POSIX)
     pstr conv_path = xr_strdup(cFileName);
     convert_path_separators(conv_path);
     hSrcFile = ::open(conv_path, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); //за такое использование указателя нужно убивать, но пока пусть будет
@@ -526,7 +522,7 @@ CVirtualFileRW::CVirtualFileRW(pcstr cFileName)
     R_ASSERT3(hSrcFile != -1, cFileName, xrDebug::ErrorToString(GetLastError()));
     struct stat file_info;
     ::fstat(hSrcFile, &file_info);
-    Size = (int)file_info.st_size;
+    Size = file_info.st_size;
     R_ASSERT3(Size, cFileName, xrDebug::ErrorToString(GetLastError()));
     data = (char*)::mmap(NULL, Size, PROT_READ | PROT_WRITE, MAP_SHARED, hSrcFile, 0);
     R_ASSERT3(data && data != MAP_FAILED, cFileName, xrDebug::ErrorToString(GetLastError()));
@@ -547,7 +543,7 @@ CVirtualFileRW::~CVirtualFileRW()
     UnmapViewOfFile((void*)data);
     CloseHandle(hSrcMap);
     CloseHandle(hSrcFile);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
+#elif defined(XR_PLATFORM_POSIX)
     ::munmap((void*)data, Size);
     ::close(hSrcFile);
     hSrcFile = -1;
@@ -562,15 +558,18 @@ CVirtualFileReader::CVirtualFileReader(pcstr cFileName)
     // Open the file
     hSrcFile = CreateFile(cFileName, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, 0, OPEN_EXISTING, 0, 0);
     R_ASSERT3(hSrcFile != INVALID_HANDLE_VALUE, cFileName, xrDebug::ErrorToString(GetLastError()));
-    Size = (int)GetFileSize(hSrcFile, NULL);
-    R_ASSERT3(Size, cFileName, xrDebug::ErrorToString(GetLastError()));
+
+    LARGE_INTEGER size;
+    BOOL result = GetFileSizeEx(hSrcFile, &size);
+    Size = static_cast<size_t>(size.QuadPart);
+    R_ASSERT3(result && Size, cFileName, xrDebug::ErrorToString(GetLastError()));
 
     hSrcMap = CreateFileMapping(hSrcFile, 0, PAGE_READONLY, 0, 0, 0);
     R_ASSERT3(hSrcMap != INVALID_HANDLE_VALUE, cFileName, xrDebug::ErrorToString(GetLastError()));
 
     data = (char*)MapViewOfFile(hSrcMap, FILE_MAP_READ, 0, 0, 0);
     R_ASSERT3(data, cFileName, xrDebug::ErrorToString(GetLastError()));
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
+#elif defined(XR_PLATFORM_POSIX)
     pstr conv_path = xr_strdup(cFileName);
     convert_path_separators(conv_path);
     hSrcFile = ::open(conv_path, O_RDONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); //за такое использование указателя нужно убивать, но пока пусть будет
@@ -600,7 +599,7 @@ CVirtualFileReader::~CVirtualFileReader()
     UnmapViewOfFile((void*)data);
     CloseHandle(hSrcMap);
     CloseHandle(hSrcFile);
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
+#elif defined(XR_PLATFORM_POSIX)
     ::munmap((void*)data, Size);
     ::close(hSrcFile);
     hSrcFile = -1;

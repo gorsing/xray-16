@@ -54,7 +54,7 @@ void CPHSkeleton::Init()
 {
     m_remove_time = u32(-1);
     b_removing = false;
-    m_startup_anim = NULL;
+    m_startup_anim = nullptr;
 }
 
 bool CPHSkeleton::Spawn(CSE_Abstract* D)
@@ -358,8 +358,8 @@ void CPHSkeleton::UnsplitSingle(CPHSkeleton* SO)
 
     SO->CopySpawnInit();
     CopySpawnInit();
-    VERIFY3(CheckObjectSize(pKinematics), *(O->cNameVisual()), "Object unsplit whith no size");
-    VERIFY3(CheckObjectSize(newKinematics), *(O->cNameVisual()), "Object unsplit whith no size");
+    VERIFY3(CheckObjectSize(pKinematics), O->cNameVisual().c_str(), "Object unsplit whith no size");
+    VERIFY3(CheckObjectSize(newKinematics), O->cNameVisual().c_str(), "Object unsplit whith no size");
 }
 
 void CPHSkeleton::CopySpawnInit()
@@ -416,7 +416,7 @@ void CPHSkeleton::InitServerObject(CSE_Abstract* D)
 
     l_tpALifePhysicObject->m_tGraphID = obj->ai_location().game_vertex_id();
     l_tpALifeDynamicObject->m_tNodeID = obj->ai_location().level_vertex_id();
-    l_tpALifePhysicObject->set_visual(*obj->cNameVisual());
+    l_tpALifePhysicObject->set_visual(obj->cNameVisual().c_str());
 
     l_tpALifePhysicObject->source_id = u16(obj->ID());
     l_tpALifePhysicObject->startup_animation = m_startup_anim;

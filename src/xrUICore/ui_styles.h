@@ -11,6 +11,11 @@ public:
     void SetupStyle(u32 styleID);
     void Reset();
 
+    bool SetStyle(pcstr name, bool reloadUI);
+
+    [[nodiscard]]
+    pcstr GetCurrentStyleName() const;
+
     [[nodiscard]]
     auto GetCurrentStyleId() const
     {
@@ -32,6 +37,9 @@ public:
 private:
     xr_vector<xr_token> m_token;
     u32 m_style_id{ DEFAULT_STYLE_ID };
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 };
 
 XRUICORE_API extern UIStyleManager* UIStyles;

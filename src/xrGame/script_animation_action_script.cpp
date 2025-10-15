@@ -7,10 +7,10 @@
 ////////////////////////////////////////////////////////////////////////////
 
 #include "pch_script.h"
-#include "script_animation_action.h"
-#include "xrScriptEngine/ScriptExporter.hpp"
 
-SCRIPT_EXPORT(CScriptAnimationAction, (),
+#include "script_animation_action.h"
+
+void CScriptAnimationAction::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -36,17 +36,17 @@ SCRIPT_EXPORT(CScriptAnimationAction, (),
                 value("look_around", int(MonsterSpace::eAA_LookAround)),
                 value("turn", int(MonsterSpace::eAA_Turn))
             ]
-            
+
             .def(constructor<>())
             .def(constructor<pcstr>())
             .def(constructor<pcstr, bool>())
             .def(constructor<MonsterSpace::EMentalState>())
-            
+
             // Monster specific
             .def(constructor<MonsterSpace::EScriptMonsterAnimAction, int>())
-            
+
             .def("anim", &CScriptAnimationAction::SetAnimation)
             .def("type", &CScriptAnimationAction::SetMentalState)
             .def("completed", &CScriptAbstractAction::completed)
     ];
-});
+}

@@ -4,6 +4,8 @@
 #include "ResourceManager.h"
 #include "Blender.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void CResourceManager::OnDeviceDestroy(BOOL)
 {
     if (Device.b_is_Ready)
@@ -52,6 +54,7 @@ void CResourceManager::OnDeviceCreate(IReader* F)
     if (!Device.b_is_Ready)
         return;
 
+    ZoneScoped;
     string256 name;
 
 #ifndef _EDITOR
@@ -63,6 +66,7 @@ void CResourceManager::OnDeviceCreate(IReader* F)
     fs = F->open_chunk(0);
     if (fs)
     {
+        ZoneScopedN("Load constants");
         while (!fs->eof())
         {
             fs->r_stringZ(name, sizeof(name));
@@ -76,6 +80,7 @@ void CResourceManager::OnDeviceCreate(IReader* F)
     fs = F->open_chunk(1);
     if (fs)
     {
+        ZoneScopedN("Load matrices");
         while (!fs->eof())
         {
             fs->r_stringZ(name, sizeof(name));
@@ -89,6 +94,7 @@ void CResourceManager::OnDeviceCreate(IReader* F)
     fs = F->open_chunk(2);
     if (fs)
     {
+        ZoneScopedN("Load blenders");
         IReader* chunk = nullptr;
         int chunk_id = 0;
 
@@ -96,24 +102,28 @@ void CResourceManager::OnDeviceCreate(IReader* F)
         {
             CBlender_DESC desc;
             chunk->r(&desc, sizeof(desc));
-            IBlender* B = IBlender::Create(desc.CLS);
-            if (nullptr == B)
+            if (IBlender* B = IBlender::Create(desc.CLS))
             {
-                Msg("! Renderer doesn't support blender '%s'", desc.cName);
-            }
-            else
-            {
+#ifndef MASTER_GOLD
                 if (B->getDescription().version != desc.version)
                 {
                     Msg("! Version conflict in shader '%s'", desc.cName);
                 }
-
+#endif
                 chunk->seek(0);
                 B->Load(*chunk, desc.version);
 
-                auto I = m_blenders.insert(std::make_pair(xr_strdup(desc.cName), B));
+                // XXX: SDK must prevent the duplication,
+                // the engine should just work
+                auto I = m_blenders.emplace(xr_strdup(desc.cName), B);
                 R_ASSERT2(I.second, "shader.xr - found duplicate name!!!");
             }
+#ifndef MASTER_GOLD
+            else
+            {
+                Msg("! Renderer doesn't support blender '%s'", desc.cName);
+            }
+#endif
             chunk->close();
             chunk_id += 1;
         }
@@ -125,6 +135,8 @@ void CResourceManager::OnDeviceCreate(IReader* F)
 
 void CResourceManager::OnDeviceCreate(LPCSTR shName)
 {
+    ZoneScoped;
+
 #ifdef _EDITOR
     if (!FS.exist(shName))
         return;
@@ -165,3 +177,4 @@ void CResourceManager::StoreNecessaryTextures()
 }
 
 void CResourceManager::DestroyNecessaryTextures() { m_necessary.clear(); }
+} // namespace xray::render::RENDER_NAMESPACE

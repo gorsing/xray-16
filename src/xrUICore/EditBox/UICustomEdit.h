@@ -9,8 +9,8 @@ enum init_mode : u32;
 
 class XRUICORE_API CUICustomEdit : public CUIStatic
 {
-private:
-    typedef CUIStatic inherited;
+protected:
+    using inherited = CUIStatic;
 
 public:
     CUICustomEdit();
@@ -33,8 +33,8 @@ public:
     void CaptureFocus(bool bCapture);
     void SetNextFocusCapturer(CUICustomEdit* next_capturer) { m_next_focus_capturer = next_capturer; };
     void ClearText();
-    virtual void SetText(LPCSTR str);
-    virtual LPCSTR GetText() const;
+    void SetText(LPCSTR str) override;
+    LPCSTR GetText() const override;
 
     virtual void Enable(bool status);
 
@@ -53,10 +53,8 @@ protected:
 protected:
     typedef fastdelegate::FastDelegate0<void> Callback;
 
-    enum
-    {
-        EDIT_BUF_SIZE = 256
-    };
+    static constexpr size_t EDIT_BUF_SIZE = 256;
+
     text_editor::line_edit_control* m_editor_control;
     text_editor::line_edit_control& ec();
     text_editor::line_edit_control const& ec() const;

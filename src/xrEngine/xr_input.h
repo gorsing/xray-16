@@ -1,7 +1,16 @@
 #pragma once
 
-#include <SDL.h>
 #include <bitset>
+
+#include <SDL.h>
+
+#include "xrCore/_vector2.h"
+
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__) && !(defined(__APPLE__) && TARGET_OS_IOS) && !defined(__amigaos4__)
+#   define SDL_HAS_CAPTURE_AND_GLOBAL_MOUSE 1
+#else
+#   define SDL_HAS_CAPTURE_AND_GLOBAL_MOUSE 0
+#endif
 
 DECLARE_MESSAGE(KeyMapChanged);
 
@@ -57,6 +66,82 @@ enum EControllerAxis
     XR_CONTROLLER_AXIS_COUNT = XR_CONTROLLER_AXIS_MAX - XR_CONTROLLER_AXIS_INVALID - 1
 };
 
+static_assert(SDL_CONTROLLER_AXIS_MAX == 6,
+    "EControllerAxis needs to be updated to match changes in SDL_GameControllerAxis.");
+
+struct ControllerAxisState
+{
+    union
+    {
+        Fvector2 xy;
+        struct
+        {
+            float x, y;
+        };
+    };
+    float magnitude;
+
+    ControllerAxisState() = default;
+
+    constexpr ControllerAxisState(const float v)
+        : xy{ v, v }, magnitude{ v } {}
+
+    constexpr ControllerAxisState(const float x, const float y, const float mag)
+        : xy{ x, y }, magnitude{ mag } {}
+
+    constexpr ControllerAxisState(const Fvector2& vec, const float mag)
+        : xy{ vec }, magnitude{ mag } {}
+
+    constexpr ControllerAxisState(Fvector2&& vec, const float mag)
+        : xy{ std::move(vec) }, magnitude{ mag } {}
+
+    ControllerAxisState(const float x, const float y)
+        : ControllerAxisState(Fvector2{ x, y }) {}
+
+    ControllerAxisState(const Fvector2& vec)
+        : xy{ vec }, magnitude{ vec.magnitude() } {}
+};
+
+// Make sure it fits the C++ standard requirements on unions and we can use default constructor
+static_assert(std::is_trivial_v<ControllerAxisState>);
+
+struct ENGINE_API ControllerState
+{
+    union
+    {
+        ControllerAxisState axes[XR_CONTROLLER_AXIS_COUNT]{};
+        struct
+        {
+            ControllerAxisState left;
+            ControllerAxisState right;
+            ControllerAxisState trigger_left;
+            ControllerAxisState trigger_right;
+        } axis;
+    };
+    static_assert(sizeof(axes) == sizeof(axis),
+        "New axis added in EControllerAxis. "
+        "Please, add new corresponding *named* axis.");
+
+    std::bitset<XR_CONTROLLER_BUTTON_COUNT> buttons;
+
+    Fvector gyroscope{};
+
+    s32 id{ -1 }; // The current active controller ID
+
+    const ControllerAxisState& get_axis(const int key) const noexcept
+    {
+        if (key > XR_CONTROLLER_AXIS_INVALID && key < XR_CONTROLLER_AXIS_MAX)
+        {
+            const int idx = key - (XR_CONTROLLER_AXIS_INVALID + 1);
+            return axes[idx];
+        }
+        static ControllerAxisState dummy{};
+        return dummy;
+    }
+
+    bool attitude_changed() const;
+};
+
 class ENGINE_API IInputReceiver;
 
 class ENGINE_API CInput
@@ -71,7 +156,7 @@ public:
         FeedbackTriggers,
     };
 
-    enum InputType
+    enum InputType : u8
     {
         KeyboardMouse,
         Controller,
@@ -79,15 +164,9 @@ public:
 
     enum
     {
-        COUNT_MOUSE_AXIS = 4,
-        COUNT_CONTROLLER_AXIS = SDL_CONTROLLER_AXIS_MAX
-    };
-
-    enum
-    {
         COUNT_MOUSE_BUTTONS = MOUSE_COUNT,
+        COUNT_MOUSE_AXIS = 4,
         COUNT_KB_BUTTONS = SDL_NUM_SCANCODES,
-        COUNT_CONTROLLER_BUTTONS = XR_CONTROLLER_BUTTON_COUNT
     };
 
     struct InputStatistics
@@ -99,18 +178,16 @@ public:
     };
 
 private:
-    std::bitset<COUNT_MOUSE_BUTTONS> mouseState;
+    InputStatistics stats;
+
     std::bitset<COUNT_KB_BUTTONS> keyboardState;
-    std::bitset<COUNT_CONTROLLER_BUTTONS> controllerState;
+    std::bitset<COUNT_MOUSE_BUTTONS> mouseState;
     int mouseAxisState[COUNT_MOUSE_AXIS];
-    int controllerAxisState[COUNT_CONTROLLER_AXIS];
-    s32 last_input_controller;
+    ControllerState controllerState;
 
     xr_vector<IInputReceiver*> cbStack;
 
     xr_vector<SDL_GameController*> controllers;
-
-    InputType currentInputType{ KeyboardMouse };
 
     void SetCurrentInputType(InputType type);
 
@@ -120,15 +197,19 @@ private:
 
     void OpenController(int idx);
 
-    InputStatistics stats;
+    MessageRegistry<pureKeyMapChanged> seqKeyMapChanged;
+
+    int textInputCounter{};
+
+    InputType currentInputType{ KeyboardMouse };
+
     bool exclusiveInput;
     bool inputGrabbed;
 
-    MessageRegistry<pureKeyMapChanged> seqKeyMapChanged;
+    SDL_Cursor* mouseCursors[SDL_NUM_SYSTEM_CURSORS]{};
+    SDL_Cursor* lastCursor{};
 
 public:
-    u32 m_mouseDelta;
-
     const InputStatistics& GetStats() const { return stats; }
     void DumpStatistics(class IGameFont& font, class IPerformanceAlert* alert);
 
@@ -136,13 +217,24 @@ public:
     void iRelease(IInputReceiver* pc);
 
     bool iGetAsyncKeyState(const int key);
+    const auto& iGetAsyncControllerState() const { return controllerState; }
+    bool iAnyMouseButtonDown() const { return mouseState.any(); }
+    bool iAnyKeyButtonDown() const { return keyboardState.any(); }
+    bool iAnyControllerButtonDown() const { return controllerState.buttons.any(); }
 
     void iGetAsyncScrollPos(Ivector2& p) const;
-    void iGetAsyncMousePos(Ivector2& p) const;
-    void iSetMousePos(const Ivector2& p) const;
+    bool iGetAsyncMousePos(Ivector2& p, bool global = false) const;
+    bool iSetMousePos(const Ivector2& p, bool global = false) const;
 
     void GrabInput(const bool grab);
     bool InputIsGrabbed() const;
+
+    void ShowCursor(const bool show);
+    void SetCursor(const SDL_SystemCursor cursor);
+
+    void EnableTextInput();
+    void DisableTextInput();
+    bool IsTextInputEnabled() const;
 
     void RegisterKeyMapChangeWatcher(pureKeyMapChanged* watcher, int priority = REG_PRIORITY_NORMAL);
     void RemoveKeyMapChangeWatcher(pureKeyMapChanged* watcher);
@@ -157,7 +249,6 @@ public:
     IInputReceiver* CurrentIR();
 
     bool IsControllerAvailable() const { return !controllers.empty(); }
-    void EnableControllerSensors(bool enable);
 
     auto GetCurrentInputType() const { return currentInputType; }
     auto IsCurrentInputTypeController() const { return GetCurrentInputType() == InputType::Controller; }

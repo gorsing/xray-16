@@ -1,5 +1,4 @@
-#ifndef LAYERS_XRRENDER_LIGHT_H_INCLUDED
-#define LAYERS_XRRENDER_LIGHT_H_INCLUDED
+#pragma once
 
 #include "xrCDB/ISpatial.h"
 
@@ -9,6 +8,8 @@
 #include "light_gi.h"
 #endif //(RENDER==R_R2) || (RENDER==R_R3) || (RENDER==R_R4) || (RENDER==R_GL)
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class light : public IRender_Light, public SpatialBase
 {
 public:
@@ -72,25 +73,26 @@ public:
         bool visible; // visible/invisible
         bool pending; // test is still pending
         u16 smap_ID;
+        float distance;
     } vis;
 
     union _xform
     {
-        struct _D
+        struct Directional
         {
             Fmatrix combine;
             s32 minX, maxX;
             s32 minY, maxY;
             BOOL transluent;
         } D[R__NUM_SUN_CASCADES];
-        struct _P
+        struct Point
         {
             Fmatrix world;
             Fmatrix view;
             Fmatrix project;
             Fmatrix combine;
         } P;
-        struct _S
+        struct Spot
         {
             Fmatrix view;
             Fmatrix project;
@@ -171,5 +173,4 @@ public:
     light();
     ~light() override;
 };
-
-#endif // #define LAYERS_XRRENDER_LIGHT_H_INCLUDED
+} // namespace xray::render::RENDER_NAMESPACE

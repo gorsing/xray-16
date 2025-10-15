@@ -38,7 +38,6 @@
 #include "smart_cover_object.h"
 #include "smart_cover.h"
 #include "smart_cover_description.h"
-#include "physics_shell_scripted.h"
 #include "CharacterPhysicsSupport.h" //Alundaio: For set_visual
 #include "damage_manager.h" //Alundaio: For set_visual
 #include "ai/phantom/phantom.h"
@@ -161,14 +160,12 @@ u16 CScriptGameObject::get_bone_id(LPCSTR bone_name) const
     return object().Visual()->dcast_PKinematics()->LL_BoneID(bone_name);
 }
 
-cphysics_shell_scripted* CScriptGameObject::get_physics_shell() const
+CPhysicsShell* CScriptGameObject::get_physics_shell() const
 {
     CPhysicsShellHolder* ph_shell_holder = smart_cast<CPhysicsShellHolder*>(&object());
     if (!ph_shell_holder)
-        return NULL;
-    if (!ph_shell_holder->PPhysicsShell())
-        return NULL;
-    return get_script_wrapper<cphysics_shell_scripted>(*ph_shell_holder->PPhysicsShell());
+        return nullptr;
+    return ph_shell_holder->PPhysicsShell();
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -348,7 +345,8 @@ void CScriptGameObject::SetAmmoElapsed(int ammo_elapsed)
 int CScriptGameObject::GetAmmoCount(u8 type)
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return 0;
+    if (!weapon)
+        return 0;
 
     if (type < weapon->m_ammoTypes.size())
         return weapon->GetAmmoCount_forType(weapon->m_ammoTypes[type]);
@@ -359,7 +357,8 @@ int CScriptGameObject::GetAmmoCount(u8 type)
 void CScriptGameObject::SetAmmoType(u8 type)
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return;
+    if (!weapon)
+        return;
 
     weapon->SetAmmoType(type);
 }
@@ -367,7 +366,8 @@ void CScriptGameObject::SetAmmoType(u8 type)
 u8 CScriptGameObject::GetAmmoType()
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return 255;
+    if (!weapon)
+        return 255;
 
     return weapon->GetAmmoType();
 }
@@ -375,7 +375,8 @@ u8 CScriptGameObject::GetAmmoType()
 void CScriptGameObject::SetMainWeaponType(u32 type)
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return;
+    if (!weapon)
+        return;
 
     weapon->set_ef_main_weapon_type(type);
 }
@@ -383,7 +384,8 @@ void CScriptGameObject::SetMainWeaponType(u32 type)
 void CScriptGameObject::SetWeaponType(u32 type)
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return;
+    if (!weapon)
+        return;
 
     weapon->set_ef_weapon_type(type);
 }
@@ -391,7 +393,8 @@ void CScriptGameObject::SetWeaponType(u32 type)
 u32 CScriptGameObject::GetMainWeaponType()
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return 255;
+    if (!weapon)
+        return 255;
 
     return weapon->ef_main_weapon_type();
 }
@@ -399,7 +402,8 @@ u32 CScriptGameObject::GetMainWeaponType()
 u32 CScriptGameObject::GetWeaponType()
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return 255;
+    if (!weapon)
+        return 255;
 
     return weapon->ef_weapon_type();
 }
@@ -407,7 +411,8 @@ u32 CScriptGameObject::GetWeaponType()
 bool CScriptGameObject::HasAmmoType(u8 type)
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return false;
+    if (!weapon)
+        return false;
 
     return type < weapon->m_ammoTypes.size();
 }
@@ -415,7 +420,8 @@ bool CScriptGameObject::HasAmmoType(u8 type)
 u8 CScriptGameObject::GetWeaponSubstate()
 {
     CWeapon* weapon = smart_cast<CWeapon*>(&object());
-    if (!weapon) return 255;
+    if (!weapon)
+        return 255;
 
     return weapon->m_sub_state;
 }
@@ -676,9 +682,6 @@ pcstr CScriptGameObject::get_smart_cover_description() const
     return smart_cover_object->get_cover().get_description()->table_id().c_str();
 }
 
-void CScriptGameObject::set_visual_name(LPCSTR visual) { object().cNameVisual_set(visual); }
-LPCSTR CScriptGameObject::get_visual_name() const { return object().cNameVisual().c_str(); }
-
 void CScriptGameObject::PhantomSetEnemy(CScriptGameObject* enemy)
 {
     CPhantom* phant = smart_cast<CPhantom*>(&object());
@@ -688,7 +691,7 @@ void CScriptGameObject::PhantomSetEnemy(CScriptGameObject* enemy)
     phant->SetEnemy(&enemy->object());
 }
 
-//Allows to force use an object if passed obj is the actor
+// Allows to force use an object if passed obj is the actor
 bool CScriptGameObject::Use(CScriptGameObject* obj)
 {
     bool ret = object().use(&obj->object());
@@ -697,30 +700,24 @@ bool CScriptGameObject::Use(CScriptGameObject* obj)
     if (!actor)
         return ret;
 
-    CInventoryOwner* pActorInv = smart_cast<CInventoryOwner*>(actor);
-    if (!pActorInv)
-        return ret;
-
     CUIActorMenu& ActorMenu = CurrentGameUI()->GetActorMenu();
 
-    CInventoryBox* pBox = smart_cast<CInventoryBox*>(&object());
-    if (pBox)
+    if (const auto box = smart_cast<CInventoryBox*>(&object()))
     {
-        ActorMenu.SetActor(pActorInv);
-        ActorMenu.SetInvBox(pBox);
+        ActorMenu.SetActor(actor);
+        ActorMenu.SetInvBox(box);
 
         ActorMenu.SetMenuMode(mmDeadBodySearch);
         ActorMenu.ShowDialog(true);
 
         return true;
     }
-    else
-    {
-        CInventoryOwner* pOtherOwner = smart_cast<CInventoryOwner*>(&object());
-        if (!pOtherOwner)
-            return ret;
 
-        /*
+    CInventoryOwner* pOtherOwner = smart_cast<CInventoryOwner*>(&object());
+    if (!pOtherOwner)
+        return ret;
+
+    /*
         CEntityAlive* e = smart_cast<CEntityAlive*>(pOtherOwner);
         if (e && e->g_Alive())
         {
@@ -729,16 +726,13 @@ bool CScriptGameObject::Use(CScriptGameObject* obj)
         }
         */
 
-        ActorMenu.SetActor(pActorInv);
-        ActorMenu.SetPartner(pOtherOwner);
+    ActorMenu.SetActor(actor);
+    ActorMenu.SetPartner(pOtherOwner);
 
-        ActorMenu.SetMenuMode(mmDeadBodySearch);
-        ActorMenu.ShowDialog(true);
+    ActorMenu.SetMenuMode(mmDeadBodySearch);
+    ActorMenu.ShowDialog(true);
 
-        return true;
-    }
-
-    return false;
+    return true;
 }
 
 void CScriptGameObject::StartTrade(CScriptGameObject* obj)
@@ -747,17 +741,13 @@ void CScriptGameObject::StartTrade(CScriptGameObject* obj)
     if (!actor)
         return;
 
-    CInventoryOwner* pActorInv = smart_cast<CInventoryOwner*>(actor);
-    if (!pActorInv)
-        return;
-
     CInventoryOwner* pOtherOwner = smart_cast<CInventoryOwner*>(&object());
     if (!pOtherOwner)
         return;
 
     CUIActorMenu& ActorMenu = CurrentGameUI()->GetActorMenu();
 
-    ActorMenu.SetActor(pActorInv);
+    ActorMenu.SetActor(actor);
     ActorMenu.SetPartner(pOtherOwner);
 
     ActorMenu.SetMenuMode(mmTrade);
@@ -770,17 +760,13 @@ void CScriptGameObject::StartUpgrade(CScriptGameObject* obj)
     if (!actor)
         return;
 
-    CInventoryOwner* pActorInv = smart_cast<CInventoryOwner*>(actor);
-    if (!pActorInv)
-        return;
-
     CInventoryOwner* pOtherOwner = smart_cast<CInventoryOwner*>(&object());
     if (!pOtherOwner)
         return;
 
     CUIActorMenu& ActorMenu = CurrentGameUI()->GetActorMenu();
 
-    ActorMenu.SetActor(pActorInv);
+    ActorMenu.SetActor(actor);
     ActorMenu.SetPartner(pOtherOwner);
 
     ActorMenu.SetMenuMode(mmUpgrade);

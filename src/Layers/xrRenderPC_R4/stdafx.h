@@ -13,10 +13,9 @@
 #ifdef _DEBUG
 #define D3D_DEBUG_INFO
 #endif
-#include <d3dx9.h>
+#include <D3D9.h>
 
 #include <D3D11.h>
-#include <D3Dx11core.h>
 #include <D3DCompiler.h>
 
 #if __has_include(<dxgi1_4.h>)
@@ -34,6 +33,15 @@
 #define HAS_DX11_3
 #endif
 
+#include <tracy/TracyD3D11.hpp>
+
+#define R_GL 0
+#define R_R1 1
+#define R_R2 2
+#define R_R3 3
+#define R_R4 4
+#define RENDER R_R4
+
 #include "Layers/xrRenderDX11/CommonTypes.h"
 
 #include "Layers/xrRenderDX11/dx11HW.h"
@@ -46,13 +54,6 @@
 #include "Layers/xrRender/Blender.h"
 #include "Layers/xrRender/Blender_CLSID.h"
 
-#define R_GL 0
-#define R_R1 1
-#define R_R2 2
-#define R_R3 3
-#define R_R4 4
-#define RENDER R_R4
-
 #include "Common/_d3d_extensions.h"
 
 #include "Layers/xrRender/ResourceManager.h"
@@ -61,6 +62,8 @@
 #include "r2.h"
 #include "r4_rendertarget.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 IC void jitter(CBlender_Compile& C)
 {
     //	C.r_Sampler	("jitter0",	JITTER(0), true, D3DTADDRESS_WRAP, D3DTEXF_POINT, D3DTEXF_NONE, D3DTEXF_POINT);
@@ -75,3 +78,4 @@ IC void jitter(CBlender_Compile& C)
     C.r_dx11Texture("jitterMipped", r2_jitter_mipped);
     C.r_dx11Sampler("smp_jitter");
 }
+} // namespace xray::render::RENDER_NAMESPACE

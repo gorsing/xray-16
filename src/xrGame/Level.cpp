@@ -29,7 +29,6 @@
 #include "ClimableObject.h"
 #include "xrAICore/Navigation/level_graph.h"
 #include "mt_config.h"
-#include "PHCommander.h"
 #include "map_manager.h"
 #include "xrEngine/CameraManager.h"
 #include "level_sounds.h"
@@ -47,6 +46,7 @@
 #include "DemoInfo.h"
 #include "CustomDetector.h"
 #include "xrPhysics/IPHWorld.h"
+#include "xrPhysics/PHCommander.h"
 #include "xrPhysics/console_vars.h"
 #include "xrNetServer/NET_Messages.h"
 #include "xrEngine/GameFont.h"
@@ -74,6 +74,8 @@ CLevel::CLevel()
       DemoCS(MUTEX_PROFILE_ID(DemoCS))
 #endif
 {
+    ZoneScoped;
+
     g_bDebugEvents = strstr(Core.Params, "-debug_ge") != nullptr;
     game_events = xr_new<NET_Queue_Event>();
     eChangeRP = Engine.Event.Handler_Attach("LEVEL:ChangeRP", this);
@@ -112,6 +114,8 @@ CLevel::CLevel()
 
 CLevel::~CLevel()
 {
+    ZoneScoped;
+
     xr_delete(g_player_hud);
     xr_delete(pHUD);
     delete_data(hud_zones_list);
@@ -125,7 +129,6 @@ CLevel::~CLevel()
     if (physics_world())
     {
         destroy_physics_world();
-        xr_delete(m_ph_commander_physics_worldstep);
     }
     // destroy PSs
     for (auto& ps : m_StaticParticles)
@@ -245,6 +248,8 @@ bool g_bDebugEvents = false;
 
 void CLevel::cl_Process_Event(u16 dest, u16 type, NET_Packet& P)
 {
+    ZoneScoped;
+
     // Msg("--- event[%d] for [%d]",type,dest);
     IGameObject* O = Objects.net_Find(dest);
     if (0 == O)
@@ -304,6 +309,8 @@ void CLevel::cl_Process_Event(u16 dest, u16 type, NET_Packet& P)
 
 void CLevel::ProcessGameEvents()
 {
+    ZoneScoped;
+
     // Game events
     {
         NET_Packet P;
@@ -403,6 +410,8 @@ void CLevel::MakeReconnect()
 
 void CLevel::OnFrame()
 {
+    ZoneScoped;
+
 #ifdef DEBUG
     DBG_RenderUpdate();
 #endif
@@ -557,10 +566,8 @@ void CLevel::OnFrame()
         }
         else
             m_level_sound_manager->Update();
-    }
-    // defer LUA-GC-STEP
-    if (!GEnv.isDedicatedServer)
-    {
+
+        // defer LUA-GC-STEP
         if (g_mt_config.test(mtLUA_GC))
         {
             Device.seqParallel.push_back(fastdelegate::FastDelegate0<>(this, &CLevel::script_gc));
@@ -578,7 +585,37 @@ void CLevel::OnFrame()
 }
 
 int psLUA_GCSTEP = 100; // 10
-void CLevel::script_gc() { lua_gc(GEnv.ScriptEngine->lua(), LUA_GCSTEP, psLUA_GCSTEP); }
+int psLUA_GCTIMEOUT = 1000;
+
+u32 ps_lua_gc_method = 1;
+
+void CLevel::script_gc()
+{
+    ZoneScoped;
+    AIStats.LuaGC.Begin();
+
+    switch (ps_lua_gc_method)
+    {
+    case 0:
+        break;
+
+    case 2:
+        if (lua_gc(GEnv.ScriptEngine->lua(), LUA_GCTIMEOUT, psLUA_GCTIMEOUT) >= 0)
+            break;
+        // LUA_GCTIMEOUT is unsupported, fallback to LUA_GCSTEP
+        [[fallthrough]];
+
+    default:
+        ps_lua_gc_method = 1;
+
+    case 1:
+        lua_gc(GEnv.ScriptEngine->lua(), LUA_GCSTEP, psLUA_GCSTEP);
+        break;
+    }
+
+    AIStats.LuaGC.End();
+}
+
 #ifdef DEBUG_PRECISE_PATH
 void test_precise_path();
 #endif
@@ -589,6 +626,8 @@ extern Flags32 dbg_net_Draw_Flags;
 
 void CLevel::OnRender()
 {
+    ZoneScoped;
+
     GEnv.Render->BeforeWorldRender();	//--#SM+#-- +SecondVP+
 
 #ifdef DEBUG
@@ -723,6 +762,8 @@ void CLevel::OnRender()
 
 void CLevel::OnEvent(EVENT E, u64 P1, u64 /**P2**/)
 {
+    ZoneScoped;
+
     if (E == eEntitySpawn)
     {
         char Name[128];
@@ -775,6 +816,7 @@ void CLevel::DumpStatistics(IGameFont& font, IPerformanceAlert* alert)
     font.OutNext("AI vision:    %2.2fms, %d", AIStats.Vis.result, AIStats.Vis.count);
     font.OutNext("- query:      %2.2fms", AIStats.VisQuery.result);
     font.OutNext("- rayCast:    %2.2fms", AIStats.VisRayTests.result);
+    font.OutNext("LUA GC:       %d Kb, %2.2fms", lua_gc(GEnv.ScriptEngine->lua(), LUA_GCCOUNT, 0), AIStats.LuaGC.result);
     AIStats.FrameStart();
 }
 
@@ -821,6 +863,8 @@ void CLevel::RemoveObject_From_4CrPr(CGameObject* pObj)
 
 void CLevel::make_NetCorrectionPrediction()
 {
+    ZoneScoped;
+
     m_bNeed_CrPr = false;
     m_bIn_CrPr = true;
     u64 NumPhSteps = physics_world()->StepsNum();

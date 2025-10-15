@@ -3,6 +3,8 @@
 
 #include "dxUIShader.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 dxUIRender UIRenderImpl;
 
 void dxUIRender::CreateUIGeom()
@@ -147,14 +149,6 @@ void dxUIRender::SetScissor(Irect* rect)
 #endif //	(RENDER == R_R3) || (RENDER == R_R4)
 }
 
-void dxUIRender::GetActiveTextureResolution(Fvector2& res)
-{
-    R_constant* C = RCache.get_c(c_sbase)._get(); // get sampler
-    CTexture* T = RCache.get_ActiveTexture(C ? C->samp.index : 0);
-    R_ASSERT(T);
-    res.set(float(T->get_Width()), float(T->get_Height()));
-}
-
 LPCSTR dxUIRender::UpdateShaderName(LPCSTR tex_name, LPCSTR sh_name)
 {
     string_path buff;
@@ -278,3 +272,4 @@ void dxUIRender::FlushPrimitive()
 
 void dxUIRender::CacheSetXformWorld(const Fmatrix& M) { RCache.set_xform_world(M); }
 void dxUIRender::CacheSetCullMode(CullMode m) { RCache.set_CullMode(CULL_NONE + m); }
+} // namespace xray::render::RENDER_NAMESPACE

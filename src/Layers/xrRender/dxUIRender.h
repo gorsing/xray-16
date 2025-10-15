@@ -1,9 +1,9 @@
-#ifndef dxUIRender_included
-#define dxUIRender_included
 #pragma once
 
 #include "Include/xrRender/UIRender.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class dxUIRender : public IUIRender
 {
 public:
@@ -24,7 +24,6 @@ public:
     //.	virtual void StartLineList(u32 iMaxVerts);
     //.	virtual void FlushLineList();
     virtual void SetScissor(Irect* rect = nullptr);
-    virtual void GetActiveTextureResolution(Fvector2& res);
 
     //.	virtual void PushPoint(float x, float y, u32 c, float u, float v);
     //	virtual void PushPoint(int x, int y, u32 c, float u, float v);
@@ -57,5 +56,4 @@ private:
 };
 
 extern dxUIRender UIRenderImpl;
-
-#endif //	dxUIRender_included
+} // namespace xray::render::RENDER_NAMESPACE

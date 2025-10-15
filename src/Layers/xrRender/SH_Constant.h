@@ -1,5 +1,3 @@
-#ifndef SH_CONSTANT_H
-#define SH_CONSTANT_H
 #pragma once
 
 #include "xrEngine/WaveForm.h"
@@ -7,6 +5,8 @@
 class IReader;
 class IWriter;
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class ECORE_API CConstant : public xr_resource_named
 {
 public:
@@ -16,16 +16,16 @@ public:
         modeWaveForm
     };
 
-public:    
+public:
     Fcolor const_float{ 0.0f, 0.0f, 0.0f, 0.0f };
     u32 const_dword{ 0 };
 
     u32 dwFrame{ 0 };
     u32 dwMode{ 0 };
-    WaveForm _R;
-    WaveForm _G;
-    WaveForm _B;
-    WaveForm _A;
+    WaveForm R;
+    WaveForm G;
+    WaveForm B;
+    WaveForm A;
 
     void set_float(float r, float g, float b, float a)
     {
@@ -50,13 +50,13 @@ public:
     {
         if (dwMode != C.dwMode)
             return FALSE;
-        if (!_R.Similar(C._R))
+        if (!R.Similar(C.R))
             return FALSE;
-        if (!_G.Similar(C._G))
+        if (!G.Similar(C.G))
             return FALSE;
-        if (!_B.Similar(C._B))
+        if (!B.Similar(C.B))
             return FALSE;
-        if (!_A.Similar(C._A))
+        if (!A.Similar(C.A))
             return FALSE;
         return TRUE;
     }
@@ -65,5 +65,4 @@ public:
 };
 
 typedef resptr_core<CConstant, resptr_base<CConstant>> ref_constant_obsolette;
-
-#endif
+} // namespace xray::render::RENDER_NAMESPACE

@@ -5,14 +5,15 @@
 
 using namespace XRay::Media;
 
-Image& Image::Create(u16 width, u16 height, void* data, ImageDataFormat format)
+Image::Image(u32 w, u32 h, void* dataPtr, ImageDataFormat fmt)
+    : format(fmt),
+      channelCount(format == ImageDataFormat::RGB8 ? 3 : 4),
+      width(w), height(h), data(dataPtr) {}
+
+Image::~Image()
 {
-    this->width = width;
-    this->height = height;
-    this->data = data;
-    this->format = format;
-    channelCount = format == ImageDataFormat::RGB8 ? 3 : 4;
-    return *this;
+    if (ownsData)
+        xr_free(data);
 }
 
 void Image::SaveTGA(const char* name, ImageDataFormat format, bool align)
@@ -52,10 +53,10 @@ void Image::SaveTGA(TWriter& writerFunc, ImageDataFormat format, bool align)
         writerFunc(&hdr, sizeof(hdr));
         int paddingBuf = 0;
         int paddingSize = align ? 4 - (width * 3 & 3) : 0;
-        for (int j = 0; j < height; j++)
+        for (u32 j = 0; j < height; j++)
         {
             u8* p = (u8*)data + scanLength * j;
-            for (int i = 0; i < width; i++)
+            for (u32 i = 0; i < width; i++)
             {
                 u8 buffer[3] = {p[0], p[1], p[2]};
                 writerFunc(buffer, sizeof(buffer));
@@ -75,10 +76,10 @@ void Image::SaveTGA(TWriter& writerFunc, ImageDataFormat format, bool align)
             writerFunc(data, width * height * channelCount);
         else
         {
-            for (int j = 0; j < height; j++)
+            for (u32 j = 0; j < height; j++)
             {
                 u8* p = (u8*)data + scanLength * j;
-                for (int i = 0; i < width; i++)
+                for (u32 i = 0; i < width; i++)
                 {
                     u8 buffer[4] = {p[0], p[1], p[2], 0xff};
                     writerFunc(buffer, sizeof(buffer));

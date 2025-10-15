@@ -26,7 +26,7 @@ XRCORE_API void VerifyPath(pcstr path);
 XRCORE_API extern u32 g_file_mapped_memory;
 XRCORE_API extern u32 g_file_mapped_count;
 XRCORE_API void dump_file_mappings();
-extern void register_file_mapping(void* address, const u32& size, LPCSTR file_name);
+extern void register_file_mapping(void* address, const u32& size, pcstr file_name);
 extern void unregister_file_mapping(void* address, const u32& size);
 #endif // DEBUG
 
@@ -69,12 +69,12 @@ public:
     IC void w_stringZ(const char* p) { w(p, xr_strlen(p) + 1); }
     IC void w_stringZ(const shared_str& p)
     {
-        w(*p ? *p : "", p.size());
+        w(p.c_str() ? p.c_str() : "", p.size());
         w_u8(0);
     }
     IC void w_stringZ(shared_str& p)
     {
-        w(*p ? *p : "", p.size());
+        w(p.c_str() ? p.c_str() : "", p.size());
         w_u8(0);
     }
     IC void w_stringZ(const xr_string& p)
@@ -161,7 +161,7 @@ public:
         xr_free(data);
     }
 #pragma warning(pop)
-    bool save_to(LPCSTR fn) const;
+    bool save_to(pcstr fn) const;
     void flush() override {}
 };
 
@@ -192,13 +192,11 @@ class IReaderBase
 
 {
 public:
-    IC IReaderBase() : m_last_pos(0), m_file_age(0) {}
+    IC IReaderBase() : m_last_pos(0) {}
     virtual ~IReaderBase() = default;
     IC implementation_type& impl() { return *(implementation_type*)this; }
     IC const implementation_type& impl() const { return *(implementation_type*)this; }
 
-    IC void set_age(u32 age) { m_file_age = age; }
-    IC u32 get_age() const { return m_file_age; }
     IC bool eof() const { return impl().elapsed() <= 0; };
     virtual void r(void* p, size_t cnt) { impl().r(p, cnt); }
 
@@ -332,8 +330,11 @@ public:
 
 private:
     size_t m_last_pos;
-    u32 m_file_age;
 };
+
+#ifdef XR_PLATFORM_WINDOWS
+#   include "FS_impl.h"
+#endif
 
 class XRCORE_API IReader : public IReaderBase<IReader>
 {
@@ -347,8 +348,6 @@ public:
     IC IReader()
         : data(nullptr), Pos(0),
           Size(0), iterpos(0) {}
-
-    ~IReader() override = default;
 
     IC IReader(void* _data, size_t _size, size_t _iterpos = 0)
     {
@@ -400,6 +399,11 @@ public:
     void r_stringZ(shared_str& dest);
     void r_stringZ(xr_string& dest);
 
+    // Same as r_string but with the difference that it returns 'false' if the read string is longer than 'tgt_sz' and
+    // 'true' if it is shorter
+    [[nodiscard]]
+    bool try_r_string(char* dest, size_t tgt_sz);
+
 public:
     void close();
 
@@ -416,12 +420,14 @@ private:
     typedef IReaderBase<IReader> inherited;
 };
 
+template class IReaderBase<IReader>;
+
 class XRCORE_API CVirtualFileRW final : public IReader
 {
 private:
 #if defined(XR_PLATFORM_WINDOWS)
     void *hSrcFile, *hSrcMap;
-#elif defined(XR_PLATFORM_LINUX) || defined(XR_PLATFORM_BSD) || defined(XR_PLATFORM_APPLE) 
+#elif defined(XR_PLATFORM_POSIX)
     int hSrcFile;
 #else
 #   error Select or add implementation for your platform

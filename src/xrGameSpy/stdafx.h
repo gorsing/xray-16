@@ -17,7 +17,14 @@
 // XXX: remove hack
 #undef min
 #undef max
-
-#include <SDL.h>
+#undef accept
+#undef bind
+#undef connect
+#undef getpeername
+#undef getsockname
+#undef getsockopt
+#undef recvfrom
+#undef sendto
+#undef setsockopt
 
 #include "xrCore/xrCore.h"

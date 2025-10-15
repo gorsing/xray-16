@@ -54,6 +54,7 @@ void CStalkerAnimationManager::reinit()
     m_script.global_animation(true);
 
     m_call_script_callback = false;
+    m_call_global_callback = false;
 
     m_previous_speed = 0.f;
     m_target_speed = 0.f;
@@ -69,9 +70,6 @@ void CStalkerAnimationManager::reload()
     m_crouch_state_config = object().SpecificCharacter().crouch_type();
     VERIFY((m_crouch_state_config == 0) || (m_crouch_state_config == 1) || (m_crouch_state_config == -1));
     m_crouch_state = m_crouch_state_config;
-
-    if (object().already_dead())
-        return;
 
     m_skeleton_animated = smart_cast<IKinematicsAnimated*>(m_visual);
     VERIFY(m_skeleton_animated);

@@ -15,6 +15,7 @@ struct ENGINE_API FSlideWindowItem;
 
 // fwd. decl.
 struct SDL_Window;
+struct SPPInfo;
 class IRenderVisual;
 class IKinematics;
 class IGameFont;
@@ -114,30 +115,10 @@ public:
     virtual ~IRender_ObjectSpecific(){};
 };
 
-class CBackend; // TODO: the real command list interface should be defined here
-
-//////////////////////////////////////////////////////////////////////////
-// definition (Target)
-class ENGINE_API IRender_Target
+struct xrImTextureData
 {
-public:
-    virtual void set_blur(float f) = 0;
-    virtual void set_gray(float f) = 0;
-    virtual void set_duality_h(float f) = 0;
-    virtual void set_duality_v(float f) = 0;
-    virtual void set_noise(float f) = 0;
-    virtual void set_noise_scale(float f) = 0;
-    virtual void set_noise_fps(float f) = 0;
-    virtual void set_color_base(u32 f) = 0;
-    virtual void set_color_gray(u32 f) = 0;
-    // virtual void set_color_add (u32 f) = 0;
-    virtual void set_color_add(const Fvector& f) = 0;
-    virtual u32 get_width(CBackend& cmd_list) = 0; // TODO: use equivalent from cmd_list
-    virtual u32 get_height(CBackend& cmd_list) = 0;
-    virtual void set_cm_imfluence(float f) = 0;
-    virtual void set_cm_interpolate(float f) = 0;
-    virtual void set_cm_textures(const shared_str& tex0, const shared_str& tex1) = 0;
-    virtual ~IRender_Target(){};
+    ImTextureID texture{};
+    Fvector2 size{};
 };
 
 enum class DeviceState
@@ -170,7 +151,6 @@ public:
         SM_FOR_CUBEMAP = 1, // tga, name used as postfix
         SM_FOR_GAMESAVE = 2, // dds/dxt1,name used as full-path
         SM_FOR_LEVELMAP = 3, // tga, name used as postfix (level_name)
-        SM_FOR_MPSENDING = 4,
     };
 
     enum RenderContext
@@ -274,6 +254,8 @@ public:
     // data
     CFrustum ViewBase;
 
+    bool hud_loading;
+
 public:
     // feature level
     virtual GenerationLevel GetGeneration() const = 0;
@@ -294,7 +276,7 @@ public:
 
     virtual void level_Load(IReader* fs) = 0;
     virtual void level_Unload() = 0;
-    
+
     void shader_option_skinning(s32 mode) { m_skinning = mode; }
     virtual HRESULT shader_compile(pcstr name, IReader* fs, pcstr pFunctionName, pcstr pTarget, u32 Flags,
         void*& result) = 0;
@@ -305,8 +287,8 @@ public:
     virtual pcstr getShaderPath() = 0;
     // virtual ref_shader getShader (int id) = 0;
     virtual IRenderVisual* getVisual(int id) = 0;
-    virtual IRender_Target* getTarget() = 0;
-    virtual CBackend& get_imm_command_list() = 0;
+
+    virtual xrImTextureData GetImGuiTextureId(pcstr texture_name) = 0;
 
     // Main
     virtual void add_Visual(u32 context_id, IRenderable* root, IRenderVisual* V, Fmatrix& m) = 0; // add visual leaf (no culling performed at all)
@@ -362,21 +344,11 @@ public:
     virtual void BeforeWorldRender() = 0; //--#SM+#-- Перед рендерингом мира
     virtual void AfterWorldRender() = 0; //--#SM+#-- После рендеринга мира (до UI)
 
-    virtual void Screenshot(ScreenshotMode mode = SM_NORMAL, pcstr name = 0) = 0;
-    virtual void Screenshot(ScreenshotMode mode, CMemoryWriter& memory_writer) = 0;
-    virtual void ScreenshotAsyncBegin() = 0;
-    virtual void ScreenshotAsyncEnd(CMemoryWriter& memory_writer) = 0;
-
-    // Render mode
-    virtual void rmNear(CBackend& cmd_list) = 0;
-    virtual void rmFar(CBackend& cmd_list) = 0;
-    virtual void rmNormal(CBackend& cmd_list) = 0;
+    virtual void Screenshot(ScreenshotMode mode = SM_NORMAL, pcstr name = nullptr) = 0;
+    virtual void SetPostProcessParams(const SPPInfo& ppi) = 0;
 
     // Constructor/destructor
     virtual ~IRender() {}
-
-protected:
-    virtual void ScreenshotImpl(ScreenshotMode mode, pcstr name, CMemoryWriter* memory_writer) = 0;
 
 public:
     //	Gamma correction functions
@@ -416,7 +388,7 @@ public:
     virtual DeviceState GetDeviceState() = 0;
     virtual bool GetForceGPU_REF() = 0;
     virtual u32 GetCacheStatPolys() = 0;
-    virtual void BeforeRender() = 0;
+    virtual void OnCameraUpdated() = 0;
     virtual void Begin() = 0;
     virtual void Clear() = 0;
     virtual void End() = 0;

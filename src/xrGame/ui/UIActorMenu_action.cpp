@@ -72,7 +72,7 @@ void CUIActorMenu::OnDragItemOnTrash(CUIDragItem* item, bool b_receive)
 
 bool CUIActorMenu::DropItemOnAnotherItem(EDDListType t_old, EDDListType t_new, CUIDragDropListEx* old_owner, CUIDragDropListEx* new_owner)
 {
-    //Alundaio: Here we export the action of dragging one inventory item on top of another! 
+    //Alundaio: Here we export the action of dragging one inventory item on top of another!
     luabind::functor<bool> funct1;
     if (GEnv.ScriptEngine->functor("actor_menu_inventory.CUIActorMenu_OnItemDropped", funct1))
     {
@@ -92,8 +92,9 @@ bool CUIActorMenu::DropItemOnAnotherItem(EDDListType t_old, EDDListType t_new, C
 
         const PIItem _iitem = _citem ? static_cast<PIItem>(_citem->m_pData) : nullptr;
 
+        // Callback handles dropping item on item, in other cases (moving, dropping from inventory) we do not fire it.
         if (_iitem == nullptr)
-            return false;
+            return true;
 
         CGameObject* GO1 = smart_cast<CGameObject*>(CurrentIItem());
         CGameObject* GO2 = smart_cast<CGameObject*>(_iitem);
@@ -253,8 +254,10 @@ bool CUIActorMenu::OnItemDbClick(CUICellItem* itm)
             ToBag(itm, false);
         }
         else if (!ToSlot(itm, false, iitem_to_place->BaseSlot()))
+        {
             if (!ToBelt(itm, false))
                 ToSlot(itm, true, iitem_to_place->BaseSlot());
+        }
         break;
     }
     case iActorBelt:
@@ -318,6 +321,16 @@ bool CUIActorMenu::OnItemFocusReceive(CUICellItem* itm)
 
     itm->m_selected = true;
     set_highlight_item(itm);
+
+	luabind::functor<bool> funct1;
+	if (GEnv.ScriptEngine->functor("actor_menu_inventory.CUIActorMenu_OnItemFocusReceive", funct1))
+	{
+		PIItem _iitem = (PIItem)itm->m_pData;
+
+        const CGameObject* GO = _iitem ? smart_cast<CGameObject*>(_iitem) : nullptr;
+		if (GO)
+			funct1(GO->lua_game_object());
+	}
     return true;
 }
 
@@ -329,6 +342,16 @@ bool CUIActorMenu::OnItemFocusLost(CUICellItem* itm)
     }
     InfoCurItem(NULL);
     clear_highlight_lists();
+
+	luabind::functor<bool> funct1;
+	if (GEnv.ScriptEngine->functor("actor_menu_inventory.CUIActorMenu_OnItemFocusLost", funct1))
+	{
+		PIItem _iitem = (PIItem)itm->m_pData;
+
+        const CGameObject* GO = _iitem ? smart_cast<CGameObject*>(_iitem) : nullptr;
+		if (GO)
+			funct1(GO->lua_game_object());
+	}
 
     return true;
 }
@@ -343,7 +366,7 @@ bool CUIActorMenu::OnItemFocusedUpdate(CUICellItem* itm)
             set_highlight_item(itm);
         }
     }
-    if (Device.dwTimeGlobal < itm->FocusReceiveTime() + (m_ItemInfo ? m_ItemInfo->delay : 0))
+    if (Device.dwTimeGlobal < itm->FocusReceiveTime() + (m_ItemInfo ? m_ItemInfo->delay * Device.time_factor() : 0))
     {
         return true; // false
     }
@@ -365,6 +388,10 @@ bool CUIActorMenu::OnMouseAction(float x, float y, EUIMessages mouse_action)
 bool CUIActorMenu::OnKeyboardAction(int dik, EUIMessages keyboard_action)
 {
     InfoCurItem(NULL);
+
+    if (inherited::OnKeyboardAction(dik, keyboard_action))
+        return true;
+
     if (IsBinded(kDROP, dik))
     {
         if (WINDOW_KEY_PRESSED == keyboard_action && CurrentIItem() && !CurrentIItem()->IsQuestItem() &&
@@ -392,28 +419,15 @@ bool CUIActorMenu::OnKeyboardAction(int dik, EUIMessages keyboard_action)
         return true;
     }
 
-    if (IsBinded(kUSE, dik) || IsBinded(kINVENTORY, dik))
+    if (IsBinded(kQUIT, dik) || IsBinded(kINVENTORY, dik) ||
+        IsBinded(kUI_BACK, dik, EKeyContext::UI))
     {
         if (WINDOW_KEY_PRESSED == keyboard_action)
         {
-            g_btnHint->Discard();
-            HideDialog();
+            OnBtnExitClicked(this, nullptr);
         }
         return true;
     }
-
-    if (IsBinded(kQUIT, dik))
-    {
-        if (WINDOW_KEY_PRESSED == keyboard_action)
-        {
-            g_btnHint->Discard();
-            HideDialog();
-        }
-        return true;
-    }
-
-    if (inherited::OnKeyboardAction(dik, keyboard_action))
-        return true;
 
     return false;
 }
@@ -428,7 +442,7 @@ void CUIActorMenu::OnPressUserKey(bool take)
         //		OnBtnPerformTrade( this, 0 );
         break;
     case mmUpgrade: TrySetCurUpgrade(); break;
-    case mmDeadBodySearch: 
+    case mmDeadBodySearch:
     {
         if (take)
             TakeAllFromPartner(this, 0);

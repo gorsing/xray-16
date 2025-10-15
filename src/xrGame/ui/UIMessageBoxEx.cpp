@@ -50,6 +50,23 @@ void CUIMessageBoxEx::OnNOClicked(CUIWindow* w, void* d)
     }
 }
 
+bool CUIMessageBoxEx::NeedCursor() const
+{
+    if (pInput->IsCurrentInputTypeKeyboardMouse())
+        return true;
+
+    switch (m_pMessageBox->GetBoxStyle())
+    {
+    case CUIMessageBox::MESSAGEBOX_DIRECT_IP:
+    case CUIMessageBox::MESSAGEBOX_PASSWORD:
+    case CUIMessageBox::MESSAGEBOX_RA_LOGIN:
+    case CUIMessageBox::MESSAGEBOX_YES_NO_COPY:
+        return true;
+    }
+
+    return false;
+}
+
 void CUIMessageBoxEx::SetText(LPCSTR text) { m_pMessageBox->SetText(text); }
 LPCSTR CUIMessageBoxEx::GetText() { return m_pMessageBox->GetText(); }
 void CUIMessageBoxEx::SendMessage(CUIWindow* pWnd, s16 msg, void* pData /* = NULL */)
@@ -74,30 +91,6 @@ void CUIMessageBoxEx::SendMessage(CUIWindow* pWnd, s16 msg, void* pData /* = NUL
 
 LPCSTR CUIMessageBoxEx::GetHost() { return m_pMessageBox->GetHost(); }
 LPCSTR CUIMessageBoxEx::GetPassword() { return m_pMessageBox->GetPassword(); }
-bool CUIMessageBoxEx::OnKeyboardAction(int dik, EUIMessages keyboard_action)
-{
-    if (keyboard_action == WINDOW_KEY_PRESSED)
-    {
-        auto action = GetBindedAction(dik);
-        if (action == kENTER || action == kJUMP)
-        {
-            m_pMessageBox->OnYesOk();
-            return true;
-            /*
-                    }else
-                        if ( IsBinded(kQUIT, dik) )
-                    {
-                        CUIMessageBox::E_MESSAGEBOX_STYLE style = m_pMessageBox->GetBoxStyle();
-                        if(style != CUIMessageBox::MESSAGEBOX_INFO)
-                            HideDialog();
-                        return true;
-            */
-        }
-        else
-            return CUIDialogWnd::OnKeyboardAction(dik, keyboard_action);
-    }
-    return CUIDialogWnd::OnKeyboardAction(dik, keyboard_action);
-}
 
 void CUIMessageBoxEx::SetTextEditURL(LPCSTR text) { m_pMessageBox->SetTextEditURL(text); }
 LPCSTR CUIMessageBoxEx::GetTextEditURL() { return m_pMessageBox->GetTextEditURL(); }

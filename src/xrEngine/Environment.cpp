@@ -37,29 +37,14 @@ static const float MAX_NOISE_FREQ = 0.03f;
 
 //////////////////////////////////////////////////////////////////////////
 // environment
-CEnvironment::CEnvironment() : m_ambients_config(0)
+CEnvironment::CEnvironment()
+    : PerlinNoise1D(xr_new<CPerlinNoise1D>(Random.randI(0, 0xFFFF)))
 {
-    bWFX = false;
-    Current[0] = 0;
-    Current[1] = 0;
-    CurrentWeather = 0;
-    CurrentWeatherName = 0;
-    eff_Rain = 0;
-    eff_LensFlare = 0;
-    eff_Thunderbolt = 0;
     OnDeviceCreate();
 
-    fGameTime = 0.f;
     fTimeFactor = 12.f;
 
-    wind_strength_factor = 0.f;
-    wind_gust_factor = 0.f;
-
-    wind_blast_strength = 0.f;
     wind_blast_direction.set(1.f, 0.f, 0.f);
-
-    wind_blast_strength_start_value = 0.f;
-    wind_blast_strength_stop_value = 0.f;
 
     // fill clouds hemi verts & faces
     const Fvector* verts;
@@ -70,7 +55,6 @@ CEnvironment::CEnvironment() : m_ambients_config(0)
     CopyMemory(&CloudsIndices.front(), indices, CloudsIndices.size() * sizeof(u16));
 
     // perlin noise
-    PerlinNoise1D = xr_new<CPerlinNoise1D>(Random.randI(0, 0xFFFF));
     PerlinNoise1D->SetOctaves(2);
     PerlinNoise1D->SetAmplitude(0.66666f);
 
@@ -195,7 +179,7 @@ void CEnvironment::SetWeather(shared_str name, bool forced)
             Msg("! Invalid weather name: %s", name.c_str());
             return;
         }
-        R_ASSERT3(it != WeatherCycles.end(), "Invalid weather name.", *name);
+        R_ASSERT3(it != WeatherCycles.end(), "Invalid weather name.", name.c_str());
         CurrentCycleName = it->first;
         if (forced)
         {
@@ -212,7 +196,7 @@ void CEnvironment::SetWeather(shared_str name, bool forced)
             SelectEnvs(fGameTime);
         }
 #ifdef WEATHER_LOGGING
-        Msg("Starting Cycle: %s [%s]", *name, forced ? "forced" : "deferred");
+        Msg("Starting Cycle: %s [%s]", name.c_str(), forced ? "forced" : "deferred");
 #endif
     }
     else
@@ -230,7 +214,7 @@ bool CEnvironment::SetWeatherFX(shared_str name)
     if (name.size())
     {
         auto it = WeatherFXs.find(name);
-        R_ASSERT3(it != WeatherFXs.end(), "Invalid weather effect name.", *name);
+        R_ASSERT3(it != WeatherFXs.end(), "Invalid weather effect name.", name.c_str());
         EnvVec* PrevWeather = CurrentWeather;
         VERIFY(PrevWeather);
         CurrentWeather = &it->second;
@@ -280,7 +264,7 @@ bool CEnvironment::SetWeatherFX(shared_str name)
         Current[0] = C0;
         Current[1] = C1;
 #ifdef WEATHER_LOGGING
-        Msg("Starting WFX: '%s' - %3.2f sec", *name, wfx_time);
+        Msg("Starting WFX: '%s' - %3.2f sec", name.c_str(), wfx_time);
 // for (auto l_it=CurrentWeather->begin(); l_it!=CurrentWeather->end(); l_it++)
 // Msg (". Env: '%s' Tm: %3.2f",*(*l_it)->m_identifier.c_str(),(*l_it)->exec_time);
 #endif
@@ -415,9 +399,11 @@ void CEnvironment::lerp()
 
 void CEnvironment::OnFrame()
 {
+    ZoneScoped;
+
     if (!g_pGameLevel)
         return;
-    
+
     lerp();
 
     PerlinNoise1D->SetFrequency(wind_gust_factor * MAX_NOISE_FREQ);

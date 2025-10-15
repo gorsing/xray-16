@@ -4,6 +4,7 @@
 #include "xr_level_controller.h"
 
 #include "xrCore/XML/XMLDocument.hpp"
+#include "xrCore/Threading/ParallelForEach.hpp"
 
 constexpr pcstr OPENXRAY_XML = "openxray.xml";
 
@@ -13,9 +14,10 @@ CStringTable& StringTable()
     return string_table;
 }
 
+std::mutex CStringTable::pDataMutex;
 xr_unique_ptr<STRING_TABLE_DATA> CStringTable::pData{};
-BOOL CStringTable::m_bWriteErrorsToLog = FALSE;
 u32 CStringTable::LanguageID = std::numeric_limits<u32>::max();
+string32 CStringTable::LanguageIDInLTX{};
 xr_vector<xr_token> CStringTable::languagesToken;
 
 void CStringTable::Destroy()
@@ -45,6 +47,8 @@ void CStringTable::Init()
     if (pData)
         return;
 
+    ZoneScoped;
+
     pData = xr_make_unique<STRING_TABLE_DATA>();
 
     FillLanguageToken();
@@ -54,24 +58,35 @@ void CStringTable::Init()
     string_path files_mask;
     xr_sprintf(files_mask, "text" DELIMITER "%s" DELIMITER "*.xml", pData->m_sLanguage.c_str());
     FS.file_list(fset, "$game_config$", FS_ListFiles, files_mask);
+
     auto fit = fset.begin();
     auto fit_e = fset.end();
 
     for (; fit != fit_e; ++fit)
     {
         string_path fn, ext;
-        _splitpath((*fit).name.c_str(), 0, 0, fn, ext);
+        _splitpath(fit->name.c_str(), nullptr, nullptr, fn, ext);
         xr_strcat(fn, ext);
 
         Load(fn);
     }
-#ifdef DEBUG
+
+    if (!translate("st_currency", pData->m_sCurrency) &&
+        !translate("ui_st_money_descr", pData->m_sCurrency) && // OGSR
+        !translate("ui_st_money_regional", pData->m_sCurrency)) // xp-dev
+    {
+        pData->m_sCurrency = pSettingsOpenXRay->read_if_exists<pcstr>("gameplay", "currency", "RU");
+    }
+
+#ifndef MASTER_GOLD
     Msg("StringTable: loaded %d files", fset.size());
 #endif
 }
 
 void CStringTable::FillLanguageToken()
 {
+    ZoneScoped;
+
     languagesToken.clear();
 
     string_path path;
@@ -128,25 +143,76 @@ void CStringTable::FillLanguageToken()
 
 void CStringTable::SetLanguage()
 {
-    if (LanguageID != std::numeric_limits<u32>::max())
+    cpcstr defined_language = pSettings->r_string("string_table", "language");
+    cpcstr defined_prefix   = pSettings->r_string("string_table", "font_prefix");
+
+    // Before introducing a console command to change the language,
+    // mods used to change localization.ltx. We detect that
+    // by saving the last value in LanguageIDInLTX
+    if (LanguageID != std::numeric_limits<u32>::max() && xr_strcmp(LanguageIDInLTX, defined_language) == 0)
+    {
         pData->m_sLanguage = languagesToken.at(LanguageID).name;
+
+        if (0 == xr_strcmp(pData->m_sLanguage, defined_language))
+            pData->m_fontPrefix = defined_prefix;
+        else
+        {
+            pData->m_fontPrefix = nullptr;
+
+            constexpr std::tuple<pcstr, pcstr> known_prefixes[] =
+            {
+                { "fra", "_west" },
+                { "ger", "_west" },
+                { "ita", "_west" },
+                { "spa", "_west" },
+                { "pol", "_cent" },
+                { "cze", "_cent" },
+            };
+            for (const auto [language, prefix] : known_prefixes)
+            {
+                if (0 == xr_strcmp(pData->m_sLanguage, language))
+                    pData->m_fontPrefix = prefix;
+            }
+        }
+    }
     else
     {
-        pData->m_sLanguage = pSettings->r_string("string_table", "language");
-        auto it = std::find_if(languagesToken.begin(), languagesToken.end(), [](const xr_token& token) {
+        pData->m_sLanguage  = defined_language;
+        pData->m_fontPrefix = defined_prefix;
+
+        const auto it = std::find_if(languagesToken.begin(), languagesToken.end(), [](const xr_token& token)
+        {
             return token.name && token.name == pData->m_sLanguage;
         });
 
         R_ASSERT3(it != languagesToken.end(), "Check localization.ltx! Current language: ", pData->m_sLanguage.c_str());
         if (it != languagesToken.end())
-            LanguageID = (*it).id;
+            LanguageID = it->id;
     }
+    xr_strcpy(LanguageIDInLTX, defined_language);
+}
+
+shared_str CStringTable::GetCurrentLanguage() const
+{
+    return pData ? pData->m_sLanguage : nullptr;
+}
+
+shared_str CStringTable::GetCurrentFontPrefix() const
+{
+    return pData ? pData->m_fontPrefix : nullptr;
+}
+
+shared_str CStringTable::GetCurrency() const
+{
+    return pData ? pData->m_sCurrency : "RU";
 }
 
 xr_token* CStringTable::GetLanguagesToken() const { return languagesToken.data(); }
 
 void CStringTable::Load(LPCSTR xml_file_full)
 {
+    ZoneScoped;
+
     XMLDocument uiXml;
     string_path _s;
     strconcat(sizeof(_s), _s, "text" DELIMITER, pData->m_sLanguage.c_str());
@@ -154,27 +220,34 @@ void CStringTable::Load(LPCSTR xml_file_full)
     uiXml.Load(CONFIG_PATH, _s, xml_file_full);
 
     //общий список всех записей таблицы в файле
-    const int string_num = uiXml.GetNodesNum(uiXml.GetRoot(), "string");
+    const size_t string_num = uiXml.GetNodesNum(uiXml.GetRoot(), "string");
 
-    for (int i = 0; i < string_num; ++i)
+    for (size_t i = 0; i < string_num; ++i)
     {
         LPCSTR string_name = uiXml.ReadAttrib(uiXml.GetRoot(), "string", i, "id", NULL);
-
-#ifndef MASTER_GOLD
-        if (pData->m_StringTable.find(string_name) != pData->m_StringTable.end())
-            Msg("~ duplicate string table id [%s]", string_name);
-#endif
-
         LPCSTR string_text = uiXml.Read(uiXml.GetRoot(), "string:text", i, NULL);
 
-        if (m_bWriteErrorsToLog && string_text)
-            Msg("[string table] '%s' no translation in '%s'", string_name, pData->m_sLanguage.c_str());
+        if (!string_text)
+        {
+#ifndef MASTER_GOLD
+            Msg("! [%s] string table entry[%s] doesn't have a translation (no 'text' tag)", xml_file_full, string_name);
+#endif
+            continue;
+        }
 
-        VERIFY3(string_text, "string table entry does not has a text", string_name);
-
-        const STRING_VALUE str_val = ParseLine(string_text);
-
-        pData->m_StringTable[string_name] = str_val;
+        [[maybe_unused]] bool duplicate{};
+        const STRING_VALUE str_val = ParseLine(string_text); // NOLINT
+        {
+            //std::lock_guard guard{ pDataMutex };
+#ifndef MASTER_GOLD
+            duplicate = pData->m_StringTable.find(string_name) != pData->m_StringTable.end();
+#endif
+            pData->m_StringTable[string_name] = str_val;
+        }
+#ifndef MASTER_GOLD
+        if (duplicate)
+            Msg("~ duplicate string table id [%s]", string_name);
+#endif
     }
 }
 
@@ -189,6 +262,8 @@ void CStringTable::ReloadLanguage()
 
 STRING_VALUE CStringTable::ParseLine(pcstr str)
 {
+    ZoneScoped;
+
     constexpr char   ACTION_STR[]     = "$$ACTION_";
     constexpr size_t ACTION_STR_LEN   = std::size(ACTION_STR) - 1;
 
@@ -222,7 +297,7 @@ STRING_VALUE CStringTable::ParseLine(pcstr str)
         }
     }
 
-    return STRING_VALUE(string.c_str());
+    return { string.c_str() };
 }
 
 STRING_VALUE CStringTable::translate(const STRING_ID& str_id) const

@@ -11,6 +11,8 @@
 #include "xrEngine/GameFont.h"
 #include "xrEngine/PerformanceAlert.hpp"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 float psOSSR = .001f;
 
 //////////////////////////////////////////////////////////////////////
@@ -57,6 +59,8 @@ void CHOM::Load()
     if (strstr(Core.Params, "-no_hom") )
         return;
 
+    ZoneScoped;
+
     // Find and open file
     string_path fName;
     FS.update_path(fName, "$level$", "level.hom");
@@ -68,6 +72,13 @@ void CHOM::Load()
     Msg("* Loading HOM: %s", fName);
 
     IReader* fs = FS.r_open(fName);
+
+    // Prepare AABB-tree
+    static const bool use_cache = !strstr(Core.Params, "-no_cdb_cache");
+
+    m_pModel = xr_new<CDB::MODEL>();
+    if (use_cache)
+        m_pModel->set_model_crc32(crc32(fs->pointer(), fs->length()));
 
     // Load tris and merge them
     CDB::Collector CL;
@@ -91,6 +102,7 @@ void CHOM::Load()
 
     xr_parallel_for(TaskRange<size_t>(0, CL.getTS()), [&](const TaskRange<size_t>& range)
     {
+        ZoneScopedN("Process triangles");
         for (size_t it = range.begin(); it != range.end(); ++it)
         {
             const CDB::TRI& clT = CL.getT()[it];
@@ -114,15 +126,12 @@ void CHOM::Load()
     });
 
     // Create AABB-tree
-    m_pModel = xr_new<CDB::MODEL>();
-    m_pModel->set_version(fs->get_age());
-    const bool bUseCache = !strstr(Core.Params, "-no_cdb_cache");
-    const bool checkCrc32 = !strstr(Core.Params, "-skip_cdb_cache_crc32_check");
+    static const bool skip_crc32_check = strstr(Core.Params, "-skip_cdb_cache_crc32_check");
 
     strconcat(fName, "cdb_cache" DELIMITER, FS.get_path("$level$")->m_Add, "hom.bin");
     FS.update_path(fName, "$app_data_root$", fName);
 
-    if (bUseCache && FS.exist(fName) && m_pModel->deserialize(fName, checkCrc32))
+    if (use_cache && FS.exist(fName) && m_pModel->deserialize(fName, skip_crc32_check))
     {
 #ifndef MASTER_GOLD
         Msg("* Loaded HOM cache (%s)...", fName);
@@ -133,9 +142,9 @@ void CHOM::Load()
 #ifndef MASTER_GOLD
         Msg("* HOM cache for '%s' was not loaded. Building the model from scratch..", fName);
 #endif
-        m_pModel->build(CL.getV(), int(CL.getVS()), CL.getT(), int(CL.getTS()));
+        m_pModel->build(CL.getV(), CL.getVS(), CL.getT(), CL.getTS());
 
-        if (bUseCache)
+        if (use_cache)
             m_pModel->serialize(fName);
     }
 
@@ -145,6 +154,7 @@ void CHOM::Load()
 
 void CHOM::Unload()
 {
+    ZoneScoped;
     xr_delete(m_pModel);
     xr_free(m_pTris);
     bEnabled = FALSE;
@@ -152,9 +162,11 @@ void CHOM::Unload()
 
 void CHOM::Render_DB(CFrustum& base)
 {
+    ZoneScoped;
+
     // Update projection matrices on every frame to ensure valid HOM culling
     float view_dim = occ_dim_0;
-#if defined(USE_DX9) || defined(USE_DX11)
+#if defined(USE_DX11)
     Fmatrix m_viewport = {view_dim / 2.f, 0.0f, 0.0f, 0.0f, 0.0f, view_dim / 2.f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
         view_dim / 2.f + 0 + 0, view_dim / 2.f + 0 + 0, 0.0f, 1.0f};
     Fmatrix m_viewport_01 = {1.f / 2.f, 0.0f, 0.0f, 0.0f, 0.0f, 1.f / 2.f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
@@ -253,6 +265,7 @@ void CHOM::Render(CFrustum& base)
     if (!bEnabled)
         return;
 
+    ZoneScoped;
     stats.Total.Begin();
     Raster.clear();
     Render_DB(base);
@@ -260,12 +273,16 @@ void CHOM::Render(CFrustum& base)
     stats.Total.End();
 }
 
-void CHOM::MT_RENDER(Task& /*thisTask*/, void* /*data*/)
+Task& CHOM::DispatchMTRender()
 {
-    CFrustum ViewBase;
-    ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
-    Enable();
-    Render(ViewBase);
+    return TaskManager::AddTask([this]
+    {
+        ZoneScoped;
+        CFrustum ViewBase;
+        ViewBase.CreateFromMatrix(Device.mFullTransform, FRUSTUM_P_LRTB + FRUSTUM_P_FAR);
+        Enable();
+        Render(ViewBase);
+    });
 }
 
 ICF BOOL xform_b0(Fvector2& min, Fvector2& max, float& minz, const Fmatrix& X, float _x, float _y, float _z)
@@ -469,3 +486,4 @@ void CHOM::OnRender()
     }
 }
 #endif
+} // namespace xray::render::RENDER_NAMESPACE

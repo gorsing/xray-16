@@ -7,7 +7,8 @@
 #include "r__sector.h"
 #include "xr_effgamma.h"
 
-
+namespace xray::render::RENDER_NAMESPACE
+{
 // Common part of interface implementation for all D3D renderers
 class D3DXRenderBase : public IRender, public pureFrame
 {
@@ -59,10 +60,12 @@ public:
     virtual void OnAssetsChanged() override;
     virtual void DumpStatistics(class IGameFont& font, class IPerformanceAlert* alert) override;
 
+    xrImTextureData GetImGuiTextureId(pcstr texture_name) override;
+
     RenderContext GetCurrentContext() const override { return IRender::PrimaryContext; }
     void MakeContextCurrent(RenderContext /*context*/) override {}
 
-    CBackend& get_imm_command_list() override
+    CBackend& get_imm_command_list()
     {
         return get_imm_context().cmd_list;
     }
@@ -166,10 +169,9 @@ protected:
     std::bitset<R__NUM_CONTEXTS> contexts_used{};
 #endif
 private:
-#if defined(USE_DX9) || defined(USE_DX11)
     CGammaControl m_Gamma;
-#endif
 
 protected:
     bool b_loaded{};
 };
+} // namespace xray::render::RENDER_NAMESPACE

@@ -17,7 +17,7 @@ struct TEX_INFO
 {
     shared_str file;
     Frect rect;
-    LPCSTR get_file_name() { return *file; }
+    pcstr get_file_name() const { return file.c_str(); }
     Frect get_rect() { return rect; }
 };
 
@@ -39,7 +39,7 @@ class XRUICORE_API CUITextureMaster
 public:
     static void ParseShTexInfo(pcstr xml_file);
     static void ParseShTexInfo(pcstr path, pcstr xml_file);
-    static void ParseShTexInfo(CUIXml& xml, bool override); 
+    static void ParseShTexInfo(CUIXml& xml, bool override);
     static void FreeTexInfo();
     static void FreeCachedShaders();
 
@@ -65,4 +65,7 @@ protected:
     static xr_map<shared_str, TEX_INFO> m_textures;
 
     static xr_map<sh_pair, ui_shader> m_shaders;
+
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 };

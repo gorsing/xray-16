@@ -6,6 +6,8 @@
 #include "Layers/xrRender/Blender.h"
 #include "Layers/xrRender/tss.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void fix_texture_name(pstr fn);
 
 void CBlender_Compile::r_Stencil(BOOL Enable, u32 Func, u32 Mask, u32 WriteMask, u32 Fail, u32 Pass, u32 ZFail)
@@ -66,7 +68,7 @@ void CBlender_Compile::r_Pass(LPCSTR _vs, LPCSTR _gs, LPCSTR _ps, bool bFog, BOO
     // Create shaders
 #if defined(USE_OGL)
     dest.pp = RImplementation.Resources->_CreatePP(_vs, _ps, _gs, "null", "null");
-    if (HW.SeparateShaderObjectsSupported || !dest.pp->pp)
+    if (GLAD_GL_ARB_separate_shader_objects || !dest.pp->pp)
 #endif
     {
         dest.ps = RImplementation.Resources->_CreatePS(_ps);
@@ -88,3 +90,4 @@ void CBlender_Compile::r_Pass(LPCSTR _vs, LPCSTR _gs, LPCSTR _ps, bool bFog, BOO
         RS.SetTSS(0, D3DTSS_ALPHAOP, D3DTOP_DISABLE);
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

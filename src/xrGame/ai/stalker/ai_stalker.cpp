@@ -292,17 +292,10 @@ void CAI_Stalker::reload(LPCSTR section)
     brain().setup(this);
 
     CCustomMonster::reload(section);
-    if (!already_dead())
-        CStepManager::reload(section);
-
-    //	if (!already_dead())
+    CStepManager::reload(section);
     CObjectHandler::reload(section);
-
-    if (!already_dead())
-        sight().reload(section);
-
-    if (!already_dead())
-        movement().reload(section);
+    sight().reload(section);
+    movement().reload(section);
 
     m_disp_walk_stand = pSettings->r_float(section, "disp_walk_stand");
     m_disp_walk_crouch = pSettings->r_float(section, "disp_walk_crouch");
@@ -763,7 +756,7 @@ void CAI_Stalker::update_object_handler()
         {
             CObjectHandler::update();
         }
-#ifdef DEBUG
+#if defined(DEBUG) && !defined(LUABIND_NO_EXCEPTIONS)
         catch (const luabind::cast_failed& message)
         {
             Msg("! Expression \"%s\" from luabind::object to %s", message.what(), message.info().name());
@@ -790,7 +783,7 @@ void CAI_Stalker::update_object_handler()
 bool CAI_Stalker::mt_object_handler_update_allowed() const
 {
     return m_client_updated &&
-        (g_pGameLevel->WorldRendered() || IGame_Persistent::IsMainMenuActive())
+        (g_pGameLevel->WorldRendered() || g_pGamePersistent->IsMainMenuActive())
 #ifdef DEBUG
         && !ShouldProcessOnRender()
 #endif
@@ -1199,9 +1192,6 @@ void CAI_Stalker::UpdateCamera()
 
 bool CAI_Stalker::can_attach(const CInventoryItem* inventory_item) const
 {
-    if (already_dead())
-        return (false);
-
     return (CObjectHandler::can_attach(inventory_item));
 }
 

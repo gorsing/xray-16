@@ -11,11 +11,7 @@
 #include "script_engine.hpp"
 
 #ifdef USE_DEBUGGER
-#ifndef USE_LUA_STUDIO
-#include "script_debugger.h"
-#else
-#include "LuaStudio/LuaStudio.hpp"
-#endif
+#include "script_debugger.hpp"
 #endif
 
 const LPCSTR main_function = "console_command_run_string_main_thread_function";
@@ -56,24 +52,20 @@ CScriptThread::CScriptThread(CScriptEngine* scriptEngine, LPCSTR caNamespaceName
                 l_iErrorCode = lua_pcall(engineLua, 0, 0, 0);
                 if (l_iErrorCode)
                 {
-                    CScriptEngine::print_output(engineLua, *m_script_name, l_iErrorCode);
+                    CScriptEngine::print_output(engineLua, m_script_name.c_str(), l_iErrorCode);
                     CScriptEngine::on_error(engineLua);
                     return;
                 }
             }
             else
             {
-                CScriptEngine::print_output(engineLua, *m_script_name, l_iErrorCode);
+                CScriptEngine::print_output(engineLua, m_script_name.c_str(), l_iErrorCode);
                 CScriptEngine::on_error(engineLua);
                 return;
             }
         }
         m_virtual_machine = lua_newthread(engineLua);
         VERIFY2(lua(), "Cannot create new Lua thread");
-#if defined(USE_DEBUGGER) && defined(USE_LUA_STUDIO)
-        if (scriptEngine->debugger())
-            scriptEngine->debugger()->add(m_virtual_machine);
-#endif
 #if !defined(USE_LUA_STUDIO) && defined(DEBUG)
 #ifdef USE_DEBUGGER
         if (scriptEngine.debugger() && scriptEngine.debugger()->Active())
@@ -107,7 +99,7 @@ bool CScriptThread::update()
         int l_iErrorCode = lua_resume(lua(), 0);
         if (l_iErrorCode && l_iErrorCode != LUA_YIELD)
         {
-            CScriptEngine::print_output(lua(), *script_name(), l_iErrorCode);
+            CScriptEngine::print_output(lua(), m_script_name.c_str(), l_iErrorCode);
             CScriptEngine::on_error(scriptEngine->lua());
 #ifdef DEBUG
             print_stack(lua());
@@ -121,14 +113,14 @@ bool CScriptThread::update()
 #ifdef DEBUG
                 if (m_current_stack_level)
                 {
-                    CScriptEngine::print_output(lua(), *script_name(), l_iErrorCode);
+                    CScriptEngine::print_output(lua(), m_script_name.c_str(), l_iErrorCode);
                     CScriptEngine::on_error(scriptEngine->lua());
                     // print_stack(lua());
                 }
 #endif
                 m_active = false;
 #ifdef DEBUG
-                scriptEngine->script_log(LuaMessageType::Info, "Script %s is finished!", *m_script_name);
+                scriptEngine->script_log(LuaMessageType::Info, "Script %s is finished!", m_script_name.c_str());
 #endif
             }
             else

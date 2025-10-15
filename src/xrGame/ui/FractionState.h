@@ -53,7 +53,7 @@ public:
 
 private:
 	int				m_actor_goodwill;
-	
+
 	shared_str		m_id;
 	shared_str		m_name;
 	shared_str		m_icon;
@@ -62,6 +62,8 @@ private:
 	shared_str		m_target_desc;
 	shared_str		m_location;
 
+private:
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
 }; // struct FractionState
 
 

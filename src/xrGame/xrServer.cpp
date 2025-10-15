@@ -193,6 +193,8 @@ bool g_sv_SendUpdate = false;
 
 void xrServer::Update()
 {
+    ZoneScoped;
+
     if (Level().IsDemoPlayStarted() || Level().IsDemoPlayFinished())
         return; // diabling server when demo is playing
     stats.Update.Begin();
@@ -331,6 +333,8 @@ void xrServer::SendUpdatePacketsToAll()
 
 void xrServer::SendUpdatesToAll()
 {
+    ZoneScoped;
+
     if (IsGameTypeSingle())
         return;
 
@@ -822,7 +826,7 @@ void xrServer::Server_Client_Check(IClient* CL)
         return;
     };
 
-    if (CL->process_id == GetCurrentProcessId())
+    if (static_cast<int>(CL->process_id) == GetCurrentProcessId())
     {
         CL->flags.bLocal = 1;
         SV_Client = (xrClientData*)CL;
@@ -983,6 +987,7 @@ void xrServer::create_direct_client()
 
 void xrServer::ProceedDelayedPackets()
 {
+    ZoneScoped;
     DelayedPackestCS.Enter();
     while (!m_aDelayedPackets.empty())
     {
@@ -1012,6 +1017,8 @@ u8 g_sv_maxPingWarningsCount = 5;
 
 void xrServer::PerformCheckClientsForMaxPing()
 {
+    ZoneScoped;
+
     struct MaxPingClientDisconnector
     {
         xrServer* m_owner;
@@ -1155,6 +1162,8 @@ void xrServer::KickCheaters()
 
 void xrServer::MakeScreenshot(ClientID const& admin_id, ClientID const& cheater_id)
 {
+    Log("~ Server screenshot request is not supported.");
+    return;
     if ((cheater_id == SV_Client->ID) && GEnv.isDedicatedServer)
     {
         return;

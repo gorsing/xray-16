@@ -3,6 +3,8 @@
 
 #include "blender_light_direct_cascade.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 CBlender_accum_direct_cascade::CBlender_accum_direct_cascade() { description.CLS = 0; }
 CBlender_accum_direct_cascade::~CBlender_accum_direct_cascade() {}
 void CBlender_accum_direct_cascade::Compile(CBlender_Compile& C)
@@ -48,6 +50,7 @@ void CBlender_accum_direct_cascade::Compile(CBlender_Compile& C)
         // 			C.i_Address		(s, D3DTADDRESS_BORDER);
         // 			C.i_BorderColor	(s, D3DCOLOR_ARGB(255, 255, 255, 255));
         // 		}
+        C.r_Sampler_rtf("s_diffuse", r2_RT_albedo);
         C.r_End();
         break;
     case SE_SUN_FAR: // far pass, only stencil clipping performed
@@ -72,7 +75,9 @@ void CBlender_accum_direct_cascade::Compile(CBlender_Compile& C)
             C.i_Address(s, D3DTADDRESS_BORDER);
             C.i_BorderColor(s, D3DCOLOR_ARGB(255, 255, 255, 255));
         }
+        C.r_Sampler_rtf("s_diffuse", r2_RT_albedo);
         C.r_End();
         break;
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

@@ -3,6 +3,8 @@
 
 #include "blender_ssao.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 #if RENDER == R_R2
 CBlender_SSAO::CBlender_SSAO() { description.CLS = 0; }
 CBlender_SSAO::~CBlender_SSAO() {}
@@ -95,9 +97,9 @@ void CBlender_SSAO_MSAA::Compile(CBlender_Compile& C)
     IBlender::Compile(C);
 
     if (Name)
-        GEnv.Render->m_MSAASample = atoi(Definition);
+        RImplementation.m_MSAASample = atoi(Definition);
     else
-        GEnv.Render->m_MSAASample = -1;
+        RImplementation.m_MSAASample = -1;
 
     switch (C.iElement)
     {
@@ -125,6 +127,7 @@ void CBlender_SSAO_MSAA::Compile(CBlender_Compile& C)
         C.r_End();
         break;
     }
-    GEnv.Render->m_MSAASample = -1;
+    RImplementation.m_MSAASample = -1;
 }
 #endif
+} // namespace xray::render::RENDER_NAMESPACE

@@ -4,7 +4,6 @@
 #include "xrServer.h"
 #include "xrMessages.h"
 #include "game_cl_base.h"
-#include "PHCommander.h"
 #include "NET_Queue.h"
 #include "MainMenu.h"
 #include "space_restriction_manager.h"
@@ -21,6 +20,7 @@
 #include "xrNetServer/NET_Messages.h"
 
 #include "xrPhysics/PhysicsCommon.h"
+#include "xrPhysics/PHCommander.h"
 
 const int max_objects_size = 2 * 1024;
 const int max_objects_size_in_save = 8 * 1024;
@@ -237,8 +237,8 @@ u32 CLevel::Objects_net_Save(NET_Packet* _Packet, u32 start, u32 max_object_size
     u32 position;
     for (; start < Objects.o_count(); start++)
     {
-        IGameObject* _P = Objects.o_get_by_iterator(start);
-        CGameObject* P = smart_cast<CGameObject*>(_P);
+        IGameObject* object = Objects.o_get_by_iterator(start);
+        CGameObject* P = smart_cast<CGameObject*>(object);
         //		Msg			("save:iterating:%d:%s, size[%d]",P->ID(),*P->cName(), Packet.w_tell() );
         if (P && !P->getDestroy() && P->net_SaveRelevant())
         {
@@ -317,6 +317,8 @@ void CLevel::Send(NET_Packet& P, u32 dwFlags, u32 dwTimeout)
 
 void CLevel::net_Update()
 {
+    ZoneScoped;
+
     if (game_configured)
     {
         // If we have enought bandwidth - replicate client data on to server
@@ -344,7 +346,7 @@ const int ConnectionTimeOut = 60000; // 1 min
 
 bool CLevel::Connect2Server(const char* options)
 {
-    NET_Packet P;
+    //NET_Packet P;
     m_bConnectResultReceived = false;
     m_bConnectResult = true;
 

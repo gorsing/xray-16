@@ -1,6 +1,6 @@
 #include "pch_script.h"
+
 #include "GameTask.h"
-#include "xrScriptEngine/ScriptExporter.hpp"
 
 void CGameTask::AddObjective_script(SGameTaskObjective* O)
 {
@@ -13,7 +13,7 @@ SGameTaskObjective* CGameTask::GetObjective_script(TASK_OBJECTIVE_ID objective_i
     return &Objective(objective_id);
 }
 
-SCRIPT_EXPORT(CGameTask, (),
+void CGameTask::script_register(lua_State* luaState)
 {
     using namespace luabind;
     using namespace luabind::policy;
@@ -43,7 +43,7 @@ SCRIPT_EXPORT(CGameTask, (),
 
             .def("get_title", &SGameTaskObjective::GetTitle_script)
             .def("set_title", &SGameTaskObjective::SetTitle_script)
-                
+
             .def("get_description", &SGameTaskObjective::GetDescription_script)
             .def("set_description", &SGameTaskObjective::SetDescription_script)
 
@@ -58,6 +58,8 @@ SCRIPT_EXPORT(CGameTask, (),
             .def("get_type", &SGameTaskObjective::GetType_script)
             .def("set_type", &SGameTaskObjective::SetType_script)
 
+            .def("get_map_location", +[](const SGameTaskObjective* self) -> pcstr { return self->m_map_location.c_str(); })
+            .def("get_map_object_id", +[](const SGameTaskObjective* self) -> u16 { return self->m_map_object_id; })
             .def("set_map_hint", &SGameTaskObjective::SetMapHint_script)
             .def("set_map_location", &SGameTaskObjective::SetMapLocation_script)
             .def("set_map_object_id", &SGameTaskObjective::SetMapObjectID_script)
@@ -66,6 +68,7 @@ SCRIPT_EXPORT(CGameTask, (),
 
             .def("remove_map_locations", &SGameTaskObjective::RemoveMapLocations)
             .def("change_map_location", &SGameTaskObjective::ChangeMapLocation)
+            .def("create_map_location", &SGameTaskObjective::CreateMapLocation)
 
             .def("add_complete_info", &SGameTaskObjective::AddCompleteInfo_script)
             .def("add_complete_func", &SGameTaskObjective::AddCompleteFunc_script)
@@ -93,9 +96,9 @@ SCRIPT_EXPORT(CGameTask, (),
             .def("get_objective", &CGameTask::GetObjective_script)
 
             .def("get_objectives_cnt", &CGameTask::GetObjectivesCount)
-            .def("get_objectives_cnt", +[](CGameTask* self)
+            .def("get_objectives_cnt", +[](const CGameTask* self)
             {
                 return self->GetObjectivesCount(false);
             })
     ];
-});
+}

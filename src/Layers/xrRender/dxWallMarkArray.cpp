@@ -3,6 +3,8 @@
 
 #include "dxUIShader.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void dxWallMarkArray::Copy(IWallMarkArray& _in) { *this = *(dxWallMarkArray*)&_in; }
 dxWallMarkArray::~dxWallMarkArray()
 {
@@ -13,7 +15,16 @@ dxWallMarkArray::~dxWallMarkArray()
 void dxWallMarkArray::AppendMark(LPCSTR s_textures)
 {
     ref_shader s;
-    s.create("effects" DELIMITER "wallmark", s_textures);
+    LPCSTR sh_name = "effects" DELIMITER "wallmark";
+#if defined(USE_DX11)
+    if (RImplementation.o.new_shader_support)
+    {
+        // Use the blood shader for any texture with the name wm_blood_*
+        if (strstr(s_textures, "wm_blood_"))
+            sh_name = "effects" DELIMITER "wallmark_blood";
+    }
+#endif
+    s.create(sh_name, s_textures);
     m_CollideMarks.push_back(s);
 }
 
@@ -31,3 +42,4 @@ ref_shader* dxWallMarkArray::dxGenerateWallmark()
 {
     return m_CollideMarks.empty() ? NULL : &m_CollideMarks[::Random.randI(0, m_CollideMarks.size())];
 }
+} // namespace xray::render::RENDER_NAMESPACE

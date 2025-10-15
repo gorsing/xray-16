@@ -1,6 +1,8 @@
 #pragma once
 
-class CBlender_ShTex : public IBlender  
+namespace xray::render::RENDER_NAMESPACE
+{
+class CBlender_ShTex : public IBlender
 {
 public:
     CBlender_ShTex();
@@ -10,3 +12,4 @@ public:
 
     void Compile (CBlender_Compile& C) override;
 };
+} // namespace xray::render::RENDER_NAMESPACE

@@ -23,19 +23,11 @@ FractionState::FractionState():
 	power(0.0f),
 	state_vs(0),
 	m_actor_goodwill(0)
-{
-	m_id._set         ( NULL );
-	m_name._set       ( NULL );
-	m_icon._set       ( NULL );
-	m_icon_big._set   ( NULL );
-	m_target._set     ( NULL );
-	m_target_desc._set( NULL );
-	m_location._set   ( NULL );
-}
+{}
 
 FractionState::FractionState( shared_str const& id )
+	: FractionState()
 {
-	FractionState();
 	set_fraction_id2( id );
 }
 
@@ -43,7 +35,7 @@ FractionState::~FractionState()
 {
 }
 
-SCRIPT_EXPORT(FractionState, (),
+void FractionState::script_register(lua_State* luaState)
 {
     using namespace luabind;
 
@@ -66,7 +58,7 @@ SCRIPT_EXPORT(FractionState, (),
             .property("target_desc",    &FractionState::get_target_desc,   &FractionState::set_target_desc)
             .property("location",       &FractionState::get_location,      &FractionState::set_location)
     ];
-})
+}
 
 void FractionState::update_info()
 {

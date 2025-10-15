@@ -9,6 +9,8 @@
 #include "Blender_Recorder.h"
 #include "Blender.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void fix_texture_name(pstr);
 
 static int ParseName(LPCSTR N)
@@ -62,8 +64,8 @@ void CBlender_Compile::_cpp_Compile(ShaderElement* _SH)
         if (id >= 0)
         {
             if (id >= int(lst.size()))
-                xrDebug::Fatal(DEBUG_INFO, "Not enought textures for shader. Base texture: '%s'.", *lst[0]);
-            base = *lst[id];
+                xrDebug::Fatal(DEBUG_INFO, "Not enought textures for shader. Base texture: '%s'.", lst[0].c_str());
+            base = lst[id].c_str();
         }
         if (!RImplementation.Resources->m_textures_description.GetDetailTexture(base, detail_texture, detail_scaler))
             bDetail = false;
@@ -81,8 +83,8 @@ void CBlender_Compile::_cpp_Compile(ShaderElement* _SH)
             if (id >= 0)
             {
                 if (id >= int(lst.size()))
-                    xrDebug::Fatal(DEBUG_INFO, "Not enought textures for shader. Base texture: '%s'.", *lst[0]);
-                base = *lst[id];
+                    xrDebug::Fatal(DEBUG_INFO, "Not enought textures for shader. Base texture: '%s'.", lst[0].c_str());
+                base = lst[id].c_str();
             }
         }
         //	Igor
@@ -204,7 +206,7 @@ void CBlender_Compile::PassSET_Shaders(pcstr _vs, pcstr _ps, pcstr _gs /*= nullp
 {
 #if defined(USE_OGL)
     dest.pp = RImplementation.Resources->_CreatePP(_vs, _ps, _gs, _hs, _ds);
-    if (HW.SeparateShaderObjectsSupported || !dest.pp->pp)
+    if (GLAD_GL_ARB_separate_shader_objects || !dest.pp->pp)
 #endif
     {
         dest.ps = RImplementation.Resources->_CreatePS(_ps);
@@ -216,17 +218,15 @@ void CBlender_Compile::PassSET_Shaders(pcstr _vs, pcstr _ps, pcstr _gs /*= nullp
 #endif
         dest.vs = RImplementation.Resources->_CreateVS(_vs, flags);
         ctable.merge(&dest.vs->constants);
-#if defined(USE_DX11) || defined(USE_OGL)
         dest.gs = RImplementation.Resources->_CreateGS(_gs);
         ctable.merge(&dest.gs->constants);
-#   ifdef USE_DX11
+#ifdef USE_DX11
         dest.hs = RImplementation.Resources->_CreateHS(_hs);
         dest.ds = RImplementation.Resources->_CreateDS(_ds);
         ctable.merge(&dest.hs->constants);
         ctable.merge(&dest.ds->constants);
         dest.cs = RImplementation.Resources->_CreateCS("null");
-#   endif
-#endif // !USE_DX9
+#endif
     }
 #if defined(USE_OGL)
     RImplementation.Resources->_LinkPP(dest);
@@ -254,14 +254,13 @@ void CBlender_Compile::PassSET_ablend_mode(BOOL bABlend, u32 abSRC, u32 abDST)
     RS.SetRS(D3DRS_SRCBLEND, bABlend ? abSRC : D3DBLEND_ONE);
     RS.SetRS(D3DRS_DESTBLEND, bABlend ? abDST : D3DBLEND_ZERO);
 
-#if defined(USE_DX11) || defined(USE_OGL)
     //	Since in our engine D3DRS_SEPARATEALPHABLENDENABLE state is
     //	always set to false and in DirectX 10 blend functions for
     //	color and alpha are always independent, assign blend options for
     //	alpha in DX11 identical to color.
+    // XXX: do we want to change this behaviour?
     RS.SetRS(D3DRS_SRCBLENDALPHA, bABlend ? abSRC : D3DBLEND_ONE);
     RS.SetRS(D3DRS_DESTBLENDALPHA, bABlend ? abDST : D3DBLEND_ZERO);
-#endif // !USE_DX9
 }
 void CBlender_Compile::PassSET_ablend_aref(BOOL bATest, u32 aRef)
 {
@@ -333,8 +332,8 @@ void CBlender_Compile::Stage_Texture(LPCSTR name, u32, u32 fmin, u32 fmip, u32 f
     if (id >= 0)
     {
         if (id >= int(lst.size()))
-            xrDebug::Fatal(DEBUG_INFO, "Not enought textures for shader. Base texture: '%s'.", *lst[0]);
-        N = *lst[id];
+            xrDebug::Fatal(DEBUG_INFO, "Not enought textures for shader. Base texture: '%s'.", lst[0].c_str());
+        N = lst[id].c_str();
     }
     passTextures.emplace_back(Stage(), ref_texture(RImplementation.Resources->_CreateTexture(N)));
     //	i_Address				(Stage(),address);
@@ -344,7 +343,7 @@ void CBlender_Compile::Stage_Matrix(LPCSTR name, int iChannel)
 {
     sh_list& lst = L_matrices;
     int id = ParseName(name);
-    CMatrix* M = RImplementation.Resources->_CreateMatrix((id >= 0) ? *lst[id] : name);
+    CMatrix* M = RImplementation.Resources->_CreateMatrix((id >= 0) ? lst[id].c_str() : name);
     passMatrices.push_back(M);
 
     // Setup transform pipeline
@@ -370,7 +369,7 @@ void CBlender_Compile::Stage_Constant(LPCSTR name)
 {
     sh_list& lst = L_constants;
     int id = ParseName(name);
-    passConstants.push_back(RImplementation.Resources->_CreateConstant((id >= 0) ? *lst[id] : name));
+    passConstants.push_back(RImplementation.Resources->_CreateConstant((id >= 0) ? lst[id].c_str() : name));
 }
 
 void CBlender_Compile::SetupSampler(u32 stage, pcstr sampler)
@@ -449,3 +448,4 @@ u32 CBlender_Compile::SampledImage(pcstr sampler, pcstr image, shared_str textur
 
     return samplerStage;
 }
+} // namespace xray::render::RENDER_NAMESPACE

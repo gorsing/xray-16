@@ -1,5 +1,7 @@
 #include "stdafx.h"
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void CRenderTarget::draw_rain(CBackend& cmd_list, light& RainSetup)
 {
     float fRainFactor = g_pGamePersistent->Environment().CurrentEnv.rain_density;
@@ -23,7 +25,7 @@ void CRenderTarget::draw_rain(CBackend& cmd_list, light& RainSetup)
     W_dirZ.normalize();
 
     // recalculate d_Z, to perform depth-clipping
-    const float fRainFar = ps_r3_dyn_wet_surf_far;
+	float fRainFar = ps_ssfx_gloss_method == 0 ? ps_r3_dyn_wet_surf_far : 250.f;
 
     Fvector center_pt;
     center_pt.mad(Device.vCameraPosition, Device.vCameraDirection, fRainFar);
@@ -76,7 +78,6 @@ void CRenderTarget::draw_rain(CBackend& cmd_list, light& RainSetup)
 #endif
 
         // compute xforms
-        FPU::m64r();
 
         // shadow xform
         Fmatrix m_shadow;
@@ -84,8 +85,6 @@ void CRenderTarget::draw_rain(CBackend& cmd_list, light& RainSetup)
             Fmatrix xf_project;
             xf_project.mul(m_TexelAdjust, RainSetup.X.D[0].combine);
             m_shadow.mul(xf_project, Device.mInvView);
-
-            FPU::m24r();
         }
 
         /*
@@ -198,7 +197,6 @@ void CRenderTarget::draw_rain(CBackend& cmd_list, light& RainSetup)
             zMin = 0;
             zMax = ps_r2_sun_near;
         } else {
-            extern float	OLES_SUN_LIMIT_27_01_07;
             zMin = ps_r2_sun_near;
             zMax = OLES_SUN_LIMIT_27_01_07;
         }
@@ -409,3 +407,4 @@ void CRenderTarget::draw_rain(CBackend& cmd_list, light& RainSetup)
         //		u_DBT_disable	();
     }
 }
+} // namespace xray::render::RENDER_NAMESPACE

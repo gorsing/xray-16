@@ -12,6 +12,8 @@
 #define PRIORITY_NORMAL 8
 #define PRIORITY_LOW    4
 
+namespace xray::render::RENDER_NAMESPACE
+{
 void resptrcode_texture::create(LPCSTR _name)
 {
     _set(RImplementation.Resources->_CreateTexture(_name));
@@ -156,9 +158,9 @@ void CTexture::Load()
 
     flags.bUser = false;
     flags.MemoryUsage = 0;
-    if (nullptr == *cName)
+    if (nullptr == cName.c_str())
         return;
-    if (0 == xr_stricmp(*cName, "$null")) return;
+    if (0 == xr_stricmp(cName.c_str(), "$null")) return;
     // we need to check only the beginning of the string,
     // so let's use strncmp instead of strstr.
     if (0 == strncmp(cName.c_str(), "$user$", sizeof("$user$") - 1))
@@ -167,11 +169,13 @@ void CTexture::Load()
         return;
     }
 
+    ZoneScoped;
+
     Preload();
 
     // Check for OGM
     string_path fn;
-    if (FS.exist(fn, "$game_textures$", *cName, ".ogm"))
+    if (FS.exist(fn, "$game_textures$", cName.c_str(), ".ogm"))
     {
         // AVI
         pTheora = xr_new<CTheoraSurface>();
@@ -212,7 +216,7 @@ void CTexture::Load()
             }
         }
     }
-    else if (FS.exist(fn, "$game_textures$", *cName, ".avi"))
+    else if (FS.exist(fn, "$game_textures$", cName.c_str(), ".avi"))
     {
 #ifdef XR_PLATFORM_WINDOWS // TODO
         // AVI
@@ -249,7 +253,7 @@ void CTexture::Load()
         }
 #endif
     }
-    else if (FS.exist(fn, "$game_textures$", *cName, ".seq"))
+    else if (FS.exist(fn, "$game_textures$", cName.c_str(), ".seq"))
     {
         // Sequence
         string256 buffer;
@@ -289,7 +293,7 @@ void CTexture::Load()
     {
         // Normal texture
         u32 mem = 0;
-        pSurface = RImplementation.texture_load(*cName, mem, desc);
+        pSurface = RImplementation.texture_load(cName.c_str(), mem, desc);
 
         // Calc memory usage and preload into vid-mem
         if (pSurface)
@@ -304,6 +308,7 @@ void CTexture::Load()
 
 void CTexture::Unload()
 {
+    ZoneScoped;
 #ifdef DEBUG
     string_path				msg_buff;
     sprintf_s(msg_buff, sizeof(msg_buff), "* Unloading texture [%s] pSurface ID=%d", cName.c_str(), pSurface);
@@ -360,3 +365,4 @@ BOOL CTexture::video_IsPlaying() const
 {
     return pTheora ? pTheora->IsPlaying() : FALSE;
 }
+} // namespace xray::render::RENDER_NAMESPACE

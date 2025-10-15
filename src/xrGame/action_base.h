@@ -47,9 +47,9 @@ protected:
     mutable edge_value_type m_weight;
     bool m_first_time;
 
-#ifdef LOG_ACTION
 public:
-    LPCSTR m_action_name;
+	pcstr m_action_name{};
+#ifdef LOG_ACTION
     bool m_use_log;
     bool m_switched;
 
@@ -80,6 +80,12 @@ public:
     virtual void save(NET_Packet& packet) {}
     virtual void load(IReader& packet) {}
 };
-typedef CActionBase<CScriptGameObject> CScriptActionBase;
+
+using CScriptActionBase = CActionBase<CScriptGameObject>;
+
+class CScriptActionBaseExport
+{
+    DECLARE_SCRIPT_REGISTER_FUNCTION();
+};
 
 #include "action_base_inline.h"

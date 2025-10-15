@@ -219,7 +219,7 @@ bool CDetailPathManager::build_circle_trajectory(
     }
     int k = vertex_id ? 0 : -1;
 
-    if (path && 
+    if (path &&
         (size + n + k) >= 0 ) //prevent crach due reserve() call with arg < 0
         path->reserve(size + n + k);
 
@@ -854,7 +854,7 @@ void CDetailPathManager::build_smooth_path(const xr_vector<u32>& level_path, u32
                 alvi ? '+' : '-', asp ? '+' : '-');
         }
         VERIFY3((alvi && asp) || (!asp && !alvi) || show_restrictions(m_restricted_object),
-            "Invalid restrictions (see log for details) for object ", *m_restricted_object->object().cName());
+            "Invalid restrictions (see log for details) for object ", m_restricted_object->object().cName().c_str());
 #endif
         m_restricted_object->add_border(start.vertex_id, dest.vertex_id);
     }

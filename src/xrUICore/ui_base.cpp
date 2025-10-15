@@ -294,17 +294,15 @@ void UICore::pp_start()
 {
     m_bPostprocess = true;
 
-    auto& cmd_list_imm = GEnv.Render->get_imm_command_list();
-
-    m_pp_scale_.set(float(GEnv.Render->getTarget()->get_width(cmd_list_imm)) / float(UI_BASE_WIDTH),
-        float(GEnv.Render->getTarget()->get_height(cmd_list_imm)) / float(UI_BASE_HEIGHT));
-    m_2DFrustumPP.CreateFromRect(Frect().set(0.0f, 0.0f, float(GEnv.Render->getTarget()->get_width(cmd_list_imm)),
-        float(GEnv.Render->getTarget()->get_height(cmd_list_imm))));
+    m_pp_scale_.set(float(Device.dwWidth) / float(UI_BASE_WIDTH),
+        float(Device.dwHeight) / float(UI_BASE_HEIGHT));
+    m_2DFrustumPP.CreateFromRect(Frect().set(0.0f, 0.0f, float(Device.dwWidth),
+        float(Device.dwHeight)));
 
     m_current_scale = &m_pp_scale_;
 
-    g_current_font_scale.set(float(GEnv.Render->getTarget()->get_width(cmd_list_imm)) / float(Device.dwWidth),
-        float(GEnv.Render->getTarget()->get_height(cmd_list_imm)) / float(Device.dwHeight));
+    g_current_font_scale.set(float(Device.dwWidth) / float(Device.dwWidth),
+        float(Device.dwHeight) / float(Device.dwHeight));
 }
 
 void UICore::pp_stop()
@@ -314,7 +312,12 @@ void UICore::pp_stop()
     g_current_font_scale.set(1.0f, 1.0f);
 }
 
-void UICore::RenderFont() { Font().Render(); }
+void UICore::RenderFont()
+{
+    ZoneScoped;
+    Font().Render();
+}
+
 bool UICore::is_widescreen()
 {
     return (Device.dwWidth) / float(Device.dwHeight) > (UI_BASE_WIDTH / UI_BASE_HEIGHT + 0.01f);

@@ -1,12 +1,11 @@
-#ifndef TSS_DEF_H
-#define TSS_DEF_H
-
 #pragma once
 
 #if defined(USE_OGL)
 #include "../xrRenderGL/glState.h"
 #endif
 
+namespace xray::render::RENDER_NAMESPACE
+{
 class SimulatorStates
 {
 private:
@@ -45,7 +44,7 @@ private:
 
 public:
     SimulatorStates() = default;
-    
+
     void set_RS(u32 a, u32 b);
     void set_TSS(u32 a, u32 b, u32 c);
     void set_SAMP(u32 a, u32 b, u32 c);
@@ -61,4 +60,4 @@ public:
         bool SamplerUsed[D3D_COMMONSHADER_SAMPLER_SLOT_COUNT], int iBaseSamplerIndex) const;
 #endif
 };
-#endif
+} // namespace xray::render::RENDER_NAMESPACE

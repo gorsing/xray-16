@@ -10,8 +10,6 @@
 
 #include "xrCore/Debug/dxerr.h"
 
-#include <SDL.h>
-
 #include <WINSOCK2.H>
 #include <Ws2tcpip.h>
 
@@ -593,7 +591,7 @@ bool IPureClient::Connect(pcstr options)
             net_csEnumeration.Enter();
             // real connect
             for (u32 I = 0; I < net_Hosts.size(); I++)
-                Msg("* HOST #%d: %s\n", I + 1, *net_Hosts[I].dpSessionName);
+                Msg("* HOST #%d: %s\n", I + 1, net_Hosts[I].dpSessionName.c_str());
 
             R_CHK(net_Hosts.front().pHostAddress->Duplicate(&pHostAddress));
             // dump_URL		("! c2s ",	pHostAddress);
@@ -658,6 +656,8 @@ bool IPureClient::Connect(pcstr options)
 
 void IPureClient::Disconnect()
 {
+    ZoneScoped;
+
     if (NET)
         NET->Close(0);
 
@@ -1074,12 +1074,11 @@ void IPureClient::net_Syncronize()
 {
     net_Syncronised = false;
     net_DeltaArray.clear();
-    Threading::SpawnThread([](void* P)
+
+    Threading::SpawnThread("network-time-sync", [this]
     {
-        SetThreadPriority(Threading::GetCurrentThreadHandle(), THREAD_PRIORITY_TIME_CRITICAL);
-        IPureClient* C = static_cast<IPureClient*>(P);
-        C->Sync_Thread();
-    }, "network-time-sync", 0, this);
+        Sync_Thread();
+    });
 }
 
 void IPureClient::ClearStatistic()
